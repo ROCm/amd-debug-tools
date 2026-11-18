@@ -58,6 +58,7 @@ Each tool has its own individual documentation page:
 * [amd-bios](https://github.com/rocm/amd-debug-tools/blob/master/docs/amd-bios.md)
 * [amd-pstate](https://github.com/rocm/amd-debug-tools/blob/master/docs/amd-pstate.md)
 * [amd-ttm](https://github.com/rocm/amd-debug-tools/blob/master/docs/amd-ttm.md)
+* [amd-power](https://github.com/rocm/amd-debug-tools/blob/master/docs/amd-power.md)
 
 ## Platform support
 

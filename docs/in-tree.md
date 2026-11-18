@@ -10,3 +10,4 @@ After dependencies are installed, you can run the tools by running:
     ./amd_bios.py
     ./amd_pstate.py
     ./amd_ttm.py
+    ./amd_power.py

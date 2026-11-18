@@ -59,3 +59,10 @@ class TestLauncher(unittest.TestCase):
         with patch("amd_debug.ttm.main") as mock_main:
             amd_debug.launch_tool("amd_ttm.py")
             mock_main.assert_called_once()
+
+    def test_launcher_amd_power(self):
+        """Test launching amd_power"""
+
+        with patch("amd_debug.power.main") as mock_main:
+            amd_debug.launch_tool("amd_power.py")
+            mock_main.assert_called_once()

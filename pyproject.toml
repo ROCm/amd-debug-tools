@@ -39,6 +39,7 @@ dependencies = [
     "Jinja2",
     "matplotlib",
     "seaborn",
+    "plotly",
 ]
 dynamic = ["version"]
 license = "MIT"
@@ -52,3 +53,4 @@ amd-s2idle = "amd_debug:amd_s2idle"
 amd-bios = "amd_debug:amd_bios"
 amd-pstate = "amd_debug:amd_pstate"
 amd-ttm = "amd_debug:amd_ttm"
+amd-power = "amd_debug:amd_power"

@@ -29,6 +29,13 @@ def amd_ttm():
     return ttm.main()
 
 
+def amd_power():
+    """Launch the amd-power tool."""
+    from . import power  # pylint: disable=import-outside-toplevel
+
+    return power.main()
+
+
 def install_dep_superset():
     """Install all superset dependencies."""
     from . import installer  # pylint: disable=import-outside-toplevel
@@ -43,6 +50,7 @@ def launch_tool(tool_name):
         "amd_bios.py": amd_bios,
         "amd_pstate.py": amd_pstate,
         "amd_ttm.py": amd_ttm,
+        "amd_power.py": amd_power,
         "install_deps.py": install_dep_superset,
     }
     if tool_name in tools:

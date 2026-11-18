@@ -14,6 +14,7 @@ from markupsafe import Markup
 import pandas as pd
 
 from amd_debug.database import SleepDatabase
+from amd_debug.power_rails import energy_to_joules
 from amd_debug.common import (
     AmdTool,
     Colors,
@@ -194,7 +195,7 @@ class SleepReport(AmdTool):
                 continue
 
             # pac194x/5x reports raw*scale in mW-seconds (millijoules)
-            energy_j = (e1 - e0) * scale / 1000.0
+            energy_j = energy_to_joules(e1 - e0, scale)
             power_w = energy_j / duration
             total_power += power_w
             has_valid_data = True
@@ -339,7 +340,7 @@ class SleepReport(AmdTool):
                 continue
 
             # pac194x/5x reports raw*scale in mW-seconds (millijoules), so
-            energy_j = (e1 - e0) * scale / 1000.0
+            energy_j = energy_to_joules(e1 - e0, scale)
             power_w = energy_j / t1_seconds
             total_power += power_w
 

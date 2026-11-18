@@ -371,3 +371,10 @@ class TestPowerRailsClass:
         # Verify delta
         delta = energy_after - energy_before
         assert delta == 50000.0
+
+
+def test_energy_to_joules():
+    """IIO scales are milli-units"""
+    from amd_debug.power_rails import energy_to_joules
+
+    assert energy_to_joules(10, 200.0) == 2.0

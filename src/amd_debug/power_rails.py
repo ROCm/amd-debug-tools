@@ -31,6 +31,15 @@ SUPPORTED_POWER_CHIPS: Set[str] = {
 MAX_CHANNELS = 16
 
 
+def energy_to_joules(raw, scale):
+    """Convert a raw energy accumulator value to Joules.
+
+    IIO energy scales yield milli-units (mW-seconds), so joules = raw * scale / 1000.
+    Works on plain numbers as well as pandas Series.
+    """
+    return raw * scale / 1000.0
+
+
 def _read_text(path: Path) -> str:
     """Read and strip text from a sysfs file."""
     return path.read_text().strip()

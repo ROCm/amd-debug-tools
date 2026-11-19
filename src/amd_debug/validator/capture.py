@@ -85,12 +85,17 @@ class CaptureHelpers:
         if not self.power_rails.rails:
             return  # No IIO power rails detected
 
+        # Labels aren't unique across devices; keep one row per rail
+        labels = [rail.label for rail in self.power_rails.rails]
         for rail in self.power_rails.rails:
+            name = rail.label
+            if labels.count(name) > 1:
+                name = f"{rail.label} ({rail.device}:{rail.channel})"
             try:
                 energy = rail.read_energy_raw()
-                self.db.record_power_rail_energy(rail.label, energy, rail.energy_scale)
+                self.db.record_power_rail_energy(name, energy, rail.energy_scale)
             except OSError as e:
-                self.db.record_debug(f"Failed to read {rail.label}: {e}", priority=1)
+                self.db.record_debug(f"Failed to read {name}: {e}", priority=1)
 
     def check_rtc_cmos(self):
         """Check if the RTC is configured to use ACPI alarm"""

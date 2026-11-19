@@ -5,7 +5,7 @@
 This module contains unit tests for the validator functions in the amd-debug-tools package.
 """
 
-from unittest.mock import patch, mock_open, Mock, MagicMock, ANY
+from unittest.mock import patch, mock_open, Mock, MagicMock, ANY, call
 
 import os
 import logging
@@ -1669,6 +1669,33 @@ class TestValidator(unittest.TestCase):
             self.validator.capture_power_rails()
             mock_record.assert_called_once()
             self.assertIn("Failed to read VDDCR_CPU", mock_record.call_args[0][0])
+
+    def test_capture_power_rails_shared_label(self):
+        """capture_power_rails keeps rails that share a label on separate rows"""
+        rails = []
+        for device, channel, label, energy in (
+            ("iio:device0", 1, "VDD_SOC", 100.0),
+            ("iio:device0", 2, "VDD_CPU", 200.0),
+            ("iio:device1", 1, "VDD_SOC", 300.0),
+        ):
+            rail = MagicMock(
+                device=device, channel=channel, label=label, energy_scale=1.0
+            )
+            rail.read_energy_raw.return_value = energy
+            rails.append(rail)
+        self.validator.power_rails.rails = rails
+        with patch.object(
+            self.validator.db, "record_power_rail_energy"
+        ) as mock_record:
+            self.validator.capture_power_rails()
+        self.assertEqual(
+            mock_record.call_args_list,
+            [
+                call("VDD_SOC (iio:device0:1)", 100.0, 1.0),
+                call("VDD_CPU", 200.0, 1.0),
+                call("VDD_SOC (iio:device1:1)", 300.0, 1.0),
+            ],
+        )
 
     def test_check_gpes_tracks_changes(self):
         """check_gpes reads gpe files and reports increases"""

@@ -29,6 +29,10 @@ class Colors:
     FAIL = "\033[91m"
     ENDC = "\033[0m"
     UNDERLINE = "\033[4m"
+    # Extra colors for the triage banner art
+    DARK_BLUE = "\033[34m"
+    LIGHT = "\033[97m"
+    ACCENT = "\033[95m"
 
 
 def read_file(fn) -> str:
@@ -146,10 +150,14 @@ def _configure_log(prefix) -> str:
             else:
                 os.makedirs(path, mode=0o755, exist_ok=True)
                 if path_obj.is_symlink():
-                    raise ValueError(f"Log directory became a symlink during creation: {path}")
+                    raise ValueError(
+                        f"Log directory became a symlink during creation: {path}"
+                    )
 
             if "SUDO_UID" in os.environ:
-                os.lchown(path, int(os.environ["SUDO_UID"]), int(os.environ["SUDO_GID"]))
+                os.lchown(
+                    path, int(os.environ["SUDO_UID"]), int(os.environ["SUDO_GID"])
+                )
         except (ValueError, OSError) as e:
             logging.warning(f"Cannot create safe log directory: {e}")
             log = "/dev/null"
@@ -161,12 +169,19 @@ def _configure_log(prefix) -> str:
                 fd = os.open(
                     log,
                     os.O_WRONLY | os.O_CREAT | os.O_NOFOLLOW,
-                    mode=stat.S_IRUSR | stat.S_IWUSR | stat.S_IRGRP | stat.S_IROTH,  # 0o644
+                    mode=stat.S_IRUSR
+                    | stat.S_IWUSR
+                    | stat.S_IRGRP
+                    | stat.S_IROTH,  # 0o644
                 )
                 try:
                     os.close(fd)
                     if "SUDO_UID" in os.environ:
-                        os.lchown(log, int(os.environ["SUDO_UID"]), int(os.environ["SUDO_GID"]))
+                        os.lchown(
+                            log,
+                            int(os.environ["SUDO_UID"]),
+                            int(os.environ["SUDO_GID"]),
+                        )
                 except Exception:
                     os.close(fd)
                     raise
@@ -424,7 +439,7 @@ def relaunch_sudo() -> None:
             "XDG_DATA_DIRS",
             "KDE_SESSION_VERSION",
             "SSH_CLIENT",
-            "SSH_TTY"
+            "SSH_TTY",
         ]:
             value = os.environ.get(var)
             if value:

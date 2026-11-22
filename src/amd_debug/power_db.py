@@ -17,7 +17,7 @@ import os
 import sqlite3
 import time
 from pathlib import Path
-from typing import Dict, Iterable, Optional, Sequence, Tuple
+from typing import Iterable, Sequence
 
 from amd_debug.power_rails import PowerRail
 
@@ -81,9 +81,9 @@ def init_schema(conn: sqlite3.Connection) -> None:
 
 def upsert_rails(
     conn: sqlite3.Connection, rails: Iterable[PowerRail]
-) -> Dict[PowerRail, int]:
+) -> dict[PowerRail, int]:
     """Insert or update rails, returning a rail -> database id mapping."""
-    mapping: Dict[PowerRail, int] = {}
+    mapping: dict[PowerRail, int] = {}
     conn.execute("BEGIN")
     try:
         for rail in rails:
@@ -108,7 +108,7 @@ def upsert_rails(
     return mapping
 
 
-def start_run(conn: sqlite3.Connection, note: Optional[str] = None) -> int:
+def start_run(conn: sqlite3.Connection, note: str | None = None) -> int:
     """Record the start of a capture run and return its id."""
     cur = conn.execute(
         "INSERT INTO capture_runs (started_ts, note) VALUES (?, ?)",
@@ -126,7 +126,7 @@ def end_run(conn: sqlite3.Connection, run_id: int) -> None:
 
 
 def insert_samples(
-    conn: sqlite3.Connection, rows: Sequence[Tuple[int, float, float, float]]
+    conn: sqlite3.Connection, rows: Sequence[tuple[int, float, float, float]]
 ) -> None:
     """Insert ``(rail_id, ts, energy_raw, energy_scale)`` rows; duplicates are ignored."""
     if not rows:

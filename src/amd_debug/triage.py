@@ -8,14 +8,16 @@ when the user runs the tool again after resetting the hung machine it knows
 what was being tested and what to ask them to change next.
 """
 
+from __future__ import annotations
+
 import html
 import json
 import os
 import stat
 import sys
 import tempfile
-from typing import Optional
 from datetime import date, datetime, timedelta
+from typing import ClassVar
 
 from amd_debug.common import (
     Colors,
@@ -642,28 +644,25 @@ class Triage:
 
     # -- report ----------------------------------------------------------
 
-    OUTCOMES = {
+    OUTCOMES: ClassVar[dict[str, str]] = {
         "no_hang": (
             "The system did not hang with the current configuration. Any "
             "issues found by the test are in the s2idle report below."
         ),
-        "fixed_by_"
-        + Stage.BIOS_DEFAULTS: (
+        "fixed_by_" + Stage.BIOS_DEFAULTS: (
             "The hang went away after resetting the BIOS to default settings. "
             "A BIOS setting changed from its default is the likely cause. "
             "Re-apply custom settings one at a time to find which one. If "
             "the settings were never changed, report this to the system "
             "vendor as a BIOS problem."
         ),
-        "fixed_by_"
-        + Stage.IOMMU: (
+        "fixed_by_" + Stage.IOMMU: (
             "The hang went away after disabling the IOMMU. This points to an "
             "IOMMU related problem in the platform firmware (IVRS/ACPI tables "
             "or the BIOS) or the Linux IOMMU driver. Report it including this "
             "report."
         ),
-        "inconclusive_unverified_"
-        + Stage.IOMMU: (
+        "inconclusive_unverified_" + Stage.IOMMU: (
             "The test was run without verifying that the IOMMU was disabled. "
             "The result is inconclusive because the IOMMU may still have been "
             "active. Verify that the IOMMU is disabled and retry the triage."
@@ -714,7 +713,7 @@ class Triage:
             n += 1
         return name
 
-    def build_report(self) -> Optional[str]:
+    def build_report(self) -> str | None:
         """Write the triage report: history, conclusion and s2idle report"""
         session = self.session
         text = self.format_history(session) + "\n\n"
@@ -727,15 +726,14 @@ class Triage:
                 tool_debug=self.debug,
                 report_debug=True,
             ).build_template(True)
-        except Exception as e:  # pylint: disable=broad-except
+        except Exception as e:  # noqa: BLE001  # pylint: disable=broad-except
             sleep_report = f"Unable to build the s2idle report: {e}"
         if self.fmt == "md":
             text = "# amd-s2idle triage report\n\n```\n" + text + "```\n\n"
             text += sleep_report
         elif self.fmt == "html":
             header = (
-                "<h1>amd-s2idle triage report</h1>\n"
-                f"<pre>{html.escape(text)}</pre>\n"
+                f"<h1>amd-s2idle triage report</h1>\n<pre>{html.escape(text)}</pre>\n"
             )
             marker = "<h1>Linux s2idle Power Report</h1>"
             if marker in sleep_report:
@@ -816,9 +814,11 @@ class Triage:
             elif not self.resume(session):
                 return True
 
-            if self.session["status"] == Status.CHANGE_PENDING:
-                if not self.guide_change():
-                    return True
+            if (
+                self.session["status"] == Status.CHANGE_PENDING
+                and not self.guide_change()
+            ):
+                return True
 
             if not self.run_prereqs():
                 return False

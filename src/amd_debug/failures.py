@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: MIT
 
 from datetime import timedelta
+
 from amd_debug.common import print_color
 
 

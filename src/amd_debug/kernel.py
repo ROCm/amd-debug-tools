@@ -2,12 +2,14 @@
 """Kernel log analysis"""
 
 import logging
-import re
 import os
+import re
 import subprocess
 from datetime import timedelta
 
-from amd_debug.common import systemd_in_use, read_file, fatal_error
+from amd_debug.common import fatal_error, read_file, systemd_in_use
+
+logger = logging.getLogger(__name__)
 
 
 def get_kernel_command_line() -> str:
@@ -236,7 +238,7 @@ class DmesgLogger(KernelLogger):
         for line in result.stdout.decode("utf-8").split("\n"):
             if "--since" in line:
                 self.since_support = True
-        logging.debug("dmesg since support: %d", self.since_support)
+        logger.debug("dmesg since support: %d", self.since_support)
 
         self.command = ["dmesg", "-t", "-k"]
         self._refresh_head()
@@ -305,8 +307,8 @@ class CySystemdLogger(KernelLogger):
 
     def __init__(self):
         from cysystemd.reader import (
-            JournalReader,
             JournalOpenMode,
+            JournalReader,
             Rule,
         )  # pylint: disable=import-outside-toplevel
 
@@ -428,7 +430,7 @@ def get_kernel_log(input_file=None) -> KernelLogger:
         except ImportError:
             kernel_log = None
         except RuntimeError as e:
-            logging.debug(e)
+            logger.debug(e)
             kernel_log = None
         if not kernel_log:
             try:
@@ -441,5 +443,5 @@ def get_kernel_log(input_file=None) -> KernelLogger:
         except subprocess.CalledProcessError as e:
             fatal_error(f"{e}")
             kernel_log = KernelLogger()
-    logging.debug("Kernel log provider: %s", kernel_log.__class__.__name__)
+    logger.debug("Kernel log provider: %s", kernel_log.__class__.__name__)
     return kernel_log

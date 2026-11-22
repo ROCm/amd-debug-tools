@@ -1,4 +1,3 @@
-#!/usr/bin/python3
 # SPDX-License-Identifier: MIT
 
 """
@@ -7,7 +6,7 @@ This module contains unit tests for the wake GPIO and IRQ functions in the amd-d
 
 import logging
 import unittest
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 from amd_debug.wake import WakeGPIO, WakeIRQ
 
@@ -240,6 +239,7 @@ class TestWakeIRQ(unittest.TestCase):
         self, _mock_os_walk, _mock_os_listdir, mock_os_path_exists, mock_read_file
     ):
         """Test amd_gpio chip with hwirq read failure"""
+
         def _read(path):
             if path.endswith("chip_name"):
                 return "amd_gpio"
@@ -469,6 +469,7 @@ class TestWakeIRQ(unittest.TestCase):
         self, mock_os_walk, mock_os_listdir, mock_os_path_exists, mock_read_file
     ):
         """ACPI name file read raises; name stays empty"""
+
         def _read(path):
             if path.endswith("/name"):
                 raise FileNotFoundError()
@@ -518,9 +519,7 @@ class TestWakeIRQ(unittest.TestCase):
 
         # The action name must be reduced to its basename before being joined
         # under the ACPI devices directory, so no ".." component is ever used.
-        acpi_checks = [
-            p for p in checked if p.startswith("/sys/bus/acpi/devices")
-        ]
+        acpi_checks = [p for p in checked if p.startswith("/sys/bus/acpi/devices")]
         self.assertIn("/sys/bus/acpi/devices/foo", acpi_checks)
         for p in acpi_checks:
             self.assertNotIn("..", p)
@@ -530,8 +529,9 @@ class TestWakeIRQ(unittest.TestCase):
 
     def test_wake_irq_str(self):
         """Test __str__ of WakeIRQ"""
-        with patch("amd_debug.wake.read_file", side_effect=FileNotFoundError()), \
-             patch("os.path.exists", return_value=False):
+        with patch("amd_debug.wake.read_file", side_effect=FileNotFoundError()), patch(
+            "os.path.exists", return_value=False
+        ):
             irq = WakeIRQ(81)
         irq.name = "Foo"
         irq.actions = "bar"

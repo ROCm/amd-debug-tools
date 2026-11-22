@@ -1,4 +1,3 @@
-#!/usr/bin/python3
 # SPDX-License-Identifier: MIT
 
 """
@@ -7,18 +6,18 @@ This module contains unit tests for the pstate tool in the amd-debug-tools packa
 
 import logging
 import unittest
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 from amd_debug.pstate import (
     AmdPstateTriage,
+    amd_cppc_cap_highest_perf,
     amd_cppc_cap_lowest_perf,
     amd_cppc_cap_lownonlin_perf,
     amd_cppc_cap_nominal_perf,
-    amd_cppc_cap_highest_perf,
-    amd_cppc_max_perf,
-    amd_cppc_min_perf,
     amd_cppc_des_perf,
     amd_cppc_epp_perf,
+    amd_cppc_max_perf,
+    amd_cppc_min_perf,
 )
 
 
@@ -236,12 +235,11 @@ class TestAmdPstateTriage(unittest.TestCase):
     ):
         """run returns False when gather_cpu_info raises FileNotFoundError"""
         triage = AmdPstateTriage(logging=False)
-        with patch.object(triage, "gather_kernel_info"), \
-             patch.object(triage, "gather_amd_pstate_info"), \
-             patch.object(triage, "gather_scheduler_info"), \
-             patch.object(
-                 triage, "gather_cpu_info", side_effect=FileNotFoundError()
-             ):
+        with patch.object(triage, "gather_kernel_info"), patch.object(
+            triage, "gather_amd_pstate_info"
+        ), patch.object(triage, "gather_scheduler_info"), patch.object(
+            triage, "gather_cpu_info", side_effect=FileNotFoundError()
+        ):
             result = triage.run()
         self.assertFalse(result)
         mock_print_color.assert_any_call("Unable to gather CPU information", "❌")
@@ -252,11 +250,11 @@ class TestAmdPstateTriage(unittest.TestCase):
     def test_run_success(self, _mock_relaunch_sudo, _mock_context, _mock_print_color):
         """run returns True when all gather steps succeed"""
         triage = AmdPstateTriage(logging=False)
-        with patch.object(triage, "gather_kernel_info"), \
-             patch.object(triage, "gather_amd_pstate_info"), \
-             patch.object(triage, "gather_scheduler_info"), \
-             patch.object(triage, "gather_cpu_info"), \
-             patch.object(triage, "gather_msrs"):
+        with patch.object(triage, "gather_kernel_info"), patch.object(
+            triage, "gather_amd_pstate_info"
+        ), patch.object(triage, "gather_scheduler_info"), patch.object(
+            triage, "gather_cpu_info"
+        ), patch.object(triage, "gather_msrs"):
             self.assertTrue(triage.run())
 
 
@@ -271,6 +269,7 @@ class TestPstateMain(unittest.TestCase):
     def test_parse_args_no_args_exits(self):
         """parse_args exits when no arguments provided"""
         from amd_debug.pstate import parse_args
+
         with self.assertRaises(SystemExit):
             parse_args()
 
@@ -278,6 +277,7 @@ class TestPstateMain(unittest.TestCase):
     def test_parse_args_version(self):
         """parse_args parses --version"""
         from amd_debug.pstate import parse_args
+
         args = parse_args()
         self.assertTrue(args.version)
 
@@ -285,6 +285,7 @@ class TestPstateMain(unittest.TestCase):
     def test_parse_args_triage(self):
         """parse_args parses triage subcommand"""
         from amd_debug.pstate import parse_args
+
         args = parse_args()
         self.assertEqual(args.command, "triage")
         self.assertTrue(args.tool_debug)
@@ -294,6 +295,7 @@ class TestPstateMain(unittest.TestCase):
     def test_main_version(self, mock_parse, mock_version):
         """main prints version and returns None"""
         from amd_debug.pstate import main
+
         mock_parse.return_value = MagicMock(version=True, command=None)
         self.assertIsNone(main())
         mock_version.assert_called_once()
@@ -304,6 +306,7 @@ class TestPstateMain(unittest.TestCase):
     def test_main_triage_success(self, mock_parse, mock_triage_cls, _mock_show):
         """main returns None when triage succeeds"""
         from amd_debug.pstate import main
+
         mock_parse.return_value = MagicMock(
             version=False, command="triage", tool_debug=False
         )
@@ -316,6 +319,7 @@ class TestPstateMain(unittest.TestCase):
     def test_main_triage_failure(self, mock_parse, mock_triage_cls, _mock_show):
         """main returns 1 when triage fails"""
         from amd_debug.pstate import main
+
         mock_parse.return_value = MagicMock(
             version=False, command="triage", tool_debug=False
         )

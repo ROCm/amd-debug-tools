@@ -1,4 +1,3 @@
-#!/usr/bin/python3
 # SPDX-License-Identifier: MIT
 
 """
@@ -8,17 +7,14 @@ amd-debug-tools package.
 
 import logging
 import struct
-import subprocess
 import unittest
-from unittest.mock import patch, MagicMock, mock_open
+from unittest.mock import MagicMock, mock_open, patch
 
-from amd_debug.prereq.amd import AmdPrerequisiteValidator
 from amd_debug.failures import *
-from amd_debug.common import apply_prefix_wrapper, BIT
+from amd_debug.prereq.amd import AmdPrerequisiteValidator
 
 
 class TestAmdPrerequisiteValidator(unittest.TestCase):
-
     @classmethod
     def setUpClass(cls):
         logging.basicConfig(filename="/dev/null", level=logging.DEBUG)
@@ -110,7 +106,7 @@ class TestAmdPrerequisiteValidator(unittest.TestCase):
     @patch("amd_debug.prereq.amd_platform.os.path.exists")
     def test_check_amd_xdna_no_iommu(self, mock_exists):
         """Test check_amd_xdna when IOMMU is disabled"""
-        mock_exists.side_effect = lambda p: True if "amdxdna" in p else False
+        mock_exists.side_effect = lambda p: "amdxdna" in p
 
         def mock_list_devices(**kwargs):
             if kwargs.get("subsystem") == "iommu":
@@ -139,7 +135,7 @@ class TestAmdPrerequisiteValidator(unittest.TestCase):
     @patch("amd_debug.prereq.amd_platform.os.path.exists")
     def test_check_amd_xdna_missing_driver(self, mock_exists):
         """Test check_amd_xdna when NPU is found but no driver is bound"""
-        mock_exists.side_effect = lambda p: True if "amdxdna" in p else False
+        mock_exists.side_effect = lambda p: "amdxdna" in p
 
         def mock_list_devices(**kwargs):
             if kwargs.get("subsystem") == "iommu":
@@ -201,7 +197,7 @@ class TestAmdPrerequisiteValidator(unittest.TestCase):
     @patch("amd_debug.prereq.amd_platform.os.path.exists")
     def test_check_amd_xdna_non_amd(self, mock_exists):
         """Test check_amd_xdna when the NPU is not an AMD device"""
-        mock_exists.side_effect = lambda p: True if "amdxdna" in p else False
+        mock_exists.side_effect = lambda p: "amdxdna" in p
 
         def mock_list_devices(**kwargs):
             if kwargs.get("subsystem") == "iommu":
@@ -338,8 +334,8 @@ class TestAmdPrerequisiteValidator(unittest.TestCase):
         self.validator.cpu_family = 0x1A
         self.validator.cpu_model = 0x20
         from amd_debug.ivrs_fixtures import (
-            make_ivrs_table,
             _pack_ivmd_single_device,
+            make_ivrs_table,
         )
 
         ivrs = make_ivrs_table(
@@ -352,34 +348,31 @@ class TestAmdPrerequisiteValidator(unittest.TestCase):
             "amd_debug.prereq.amd_platform.open",
             new_callable=unittest.mock.mock_open,
             read_data=ivrs,
-        ):
-            with patch(
-                "amd_debug.prereq.amd_platform.os.path.exists", return_value=True
-            ):
-                iommu_device = MagicMock(sys_path="/sys/devices/iommu")
-                acpi_device = MagicMock(sys_path="/sys/devices/acpi/MSFT0201")
-                platform_device = MagicMock(
-                    sys_path="/sys/devices/platform/MSFT0201",
-                    attributes={"iommu": MagicMock()},
-                )
-                self.mock_pyudev.list_devices.side_effect = [
-                    [iommu_device],
-                    [acpi_device],
-                    [platform_device],
-                ]
-                result = self.validator.check_iommu()
-                self.assertTrue(result)
-                self.mock_db.record_prereq.assert_called_with(
-                    "IOMMU properly configured", "✅"
-                )
+        ), patch("amd_debug.prereq.amd_platform.os.path.exists", return_value=True):
+            iommu_device = MagicMock(sys_path="/sys/devices/iommu")
+            acpi_device = MagicMock(sys_path="/sys/devices/acpi/MSFT0201")
+            platform_device = MagicMock(
+                sys_path="/sys/devices/platform/MSFT0201",
+                attributes={"iommu": MagicMock()},
+            )
+            self.mock_pyudev.list_devices.side_effect = [
+                [iommu_device],
+                [acpi_device],
+                [platform_device],
+            ]
+            result = self.validator.check_iommu()
+            self.assertTrue(result)
+            self.mock_db.record_prereq.assert_called_with(
+                "IOMMU properly configured", "✅"
+            )
 
     def test_check_iommu_no_dma_protection_BUT_msft0201_all_devices(self):
         """Test check_iommu when DMA protection disabled but IVMD 0x20 covers all devices."""
         self.validator.cpu_family = 0x1A
         self.validator.cpu_model = 0x20
         from amd_debug.ivrs_fixtures import (
-            make_ivrs_table,
             _pack_ivmd_all_devices,
+            make_ivrs_table,
         )
 
         ivrs = make_ivrs_table(
@@ -392,26 +385,23 @@ class TestAmdPrerequisiteValidator(unittest.TestCase):
             "amd_debug.prereq.amd_platform.open",
             new_callable=unittest.mock.mock_open,
             read_data=ivrs,
-        ):
-            with patch(
-                "amd_debug.prereq.amd_platform.os.path.exists", return_value=True
-            ):
-                iommu_device = MagicMock(sys_path="/sys/devices/iommu")
-                acpi_device = MagicMock(sys_path="/sys/devices/acpi/MSFT0201")
-                platform_device = MagicMock(
-                    sys_path="/sys/devices/platform/MSFT0201",
-                    attributes={"iommu": MagicMock()},
-                )
-                self.mock_pyudev.list_devices.side_effect = [
-                    [iommu_device],
-                    [acpi_device],
-                    [platform_device],
-                ]
-                result = self.validator.check_iommu()
-                self.assertTrue(result)
-                self.mock_db.record_prereq.assert_called_with(
-                    "IOMMU properly configured", "✅"
-                )
+        ), patch("amd_debug.prereq.amd_platform.os.path.exists", return_value=True):
+            iommu_device = MagicMock(sys_path="/sys/devices/iommu")
+            acpi_device = MagicMock(sys_path="/sys/devices/acpi/MSFT0201")
+            platform_device = MagicMock(
+                sys_path="/sys/devices/platform/MSFT0201",
+                attributes={"iommu": MagicMock()},
+            )
+            self.mock_pyudev.list_devices.side_effect = [
+                [iommu_device],
+                [acpi_device],
+                [platform_device],
+            ]
+            result = self.validator.check_iommu()
+            self.assertTrue(result)
+            self.mock_db.record_prereq.assert_called_with(
+                "IOMMU properly configured", "✅"
+            )
 
     def test_check_iommu_msft0201_no_ivmd_mapping(self):
         """Test check_iommu when MSFT0201 is in IVHD but has no IVMD mapping."""
@@ -429,38 +419,35 @@ class TestAmdPrerequisiteValidator(unittest.TestCase):
             "amd_debug.prereq.amd_platform.open",
             new_callable=unittest.mock.mock_open,
             read_data=ivrs,
-        ):
-            with patch(
-                "amd_debug.prereq.amd_platform.os.path.exists", return_value=True
-            ):
-                iommu_device = MagicMock(sys_path="/sys/devices/iommu")
-                acpi_device = MagicMock(sys_path="/sys/devices/acpi/MSFT0201")
-                platform_device = MagicMock(
-                    sys_path="/sys/devices/platform/MSFT0201",
-                    attributes={"iommu": MagicMock()},
-                )
-                self.mock_pyudev.list_devices.side_effect = [
-                    [iommu_device],
-                    [acpi_device],
-                    [platform_device],
-                ]
-                result = self.validator.check_iommu()
-                self.assertFalse(result)
-                self.assertTrue(
-                    any(isinstance(f, DMArNotEnabled) for f in self.validator.failures)
-                )
-                self.mock_db.record_prereq.assert_called_with(
-                    "IOMMU is misconfigured: MSFT0201 declared in IVRS but no DMA mapping",
-                    "❌",
-                )
+        ), patch("amd_debug.prereq.amd_platform.os.path.exists", return_value=True):
+            iommu_device = MagicMock(sys_path="/sys/devices/iommu")
+            acpi_device = MagicMock(sys_path="/sys/devices/acpi/MSFT0201")
+            platform_device = MagicMock(
+                sys_path="/sys/devices/platform/MSFT0201",
+                attributes={"iommu": MagicMock()},
+            )
+            self.mock_pyudev.list_devices.side_effect = [
+                [iommu_device],
+                [acpi_device],
+                [platform_device],
+            ]
+            result = self.validator.check_iommu()
+            self.assertFalse(result)
+            self.assertTrue(
+                any(isinstance(f, DMArNotEnabled) for f in self.validator.failures)
+            )
+            self.mock_db.record_prereq.assert_called_with(
+                "IOMMU is misconfigured: MSFT0201 declared in IVRS but no DMA mapping",
+                "❌",
+            )
 
     def test_check_iommu_msft0201_wrong_ivmd_device_id(self):
         """Test check_iommu when IVMD exists but device ID doesn't match MSFT0201."""
         self.validator.cpu_family = 0x1A
         self.validator.cpu_model = 0x20
         from amd_debug.ivrs_fixtures import (
-            make_ivrs_table,
             _pack_ivmd_single_device,
+            make_ivrs_table,
         )
 
         # IVMD for device 0x70, but MSFT0201 is at 0x60
@@ -474,38 +461,35 @@ class TestAmdPrerequisiteValidator(unittest.TestCase):
             "amd_debug.prereq.amd_platform.open",
             new_callable=unittest.mock.mock_open,
             read_data=ivrs,
-        ):
-            with patch(
-                "amd_debug.prereq.amd_platform.os.path.exists", return_value=True
-            ):
-                iommu_device = MagicMock(sys_path="/sys/devices/iommu")
-                acpi_device = MagicMock(sys_path="/sys/devices/acpi/MSFT0201")
-                platform_device = MagicMock(
-                    sys_path="/sys/devices/platform/MSFT0201",
-                    attributes={"iommu": MagicMock()},
-                )
-                self.mock_pyudev.list_devices.side_effect = [
-                    [iommu_device],
-                    [acpi_device],
-                    [platform_device],
-                ]
-                result = self.validator.check_iommu()
-                self.assertFalse(result)
-                self.assertTrue(
-                    any(isinstance(f, DMArNotEnabled) for f in self.validator.failures)
-                )
-                self.mock_db.record_prereq.assert_called_with(
-                    "IOMMU is misconfigured: MSFT0201 declared in IVRS but no DMA mapping",
-                    "❌",
-                )
+        ), patch("amd_debug.prereq.amd_platform.os.path.exists", return_value=True):
+            iommu_device = MagicMock(sys_path="/sys/devices/iommu")
+            acpi_device = MagicMock(sys_path="/sys/devices/acpi/MSFT0201")
+            platform_device = MagicMock(
+                sys_path="/sys/devices/platform/MSFT0201",
+                attributes={"iommu": MagicMock()},
+            )
+            self.mock_pyudev.list_devices.side_effect = [
+                [iommu_device],
+                [acpi_device],
+                [platform_device],
+            ]
+            result = self.validator.check_iommu()
+            self.assertFalse(result)
+            self.assertTrue(
+                any(isinstance(f, DMArNotEnabled) for f in self.validator.failures)
+            )
+            self.mock_db.record_prereq.assert_called_with(
+                "IOMMU is misconfigured: MSFT0201 declared in IVRS but no DMA mapping",
+                "❌",
+            )
 
     def test_check_iommu_msft0201_in_ivmd_exclusion_range(self):
         """Test check_iommu when MSFT0201 is covered by IVMD 0x22 range."""
         self.validator.cpu_family = 0x1A
         self.validator.cpu_model = 0x20
         from amd_debug.ivrs_fixtures import (
-            make_ivrs_table,
             _pack_ivmd_exclusion_range,
+            make_ivrs_table,
         )
 
         ivrs = make_ivrs_table(
@@ -522,34 +506,31 @@ class TestAmdPrerequisiteValidator(unittest.TestCase):
             "amd_debug.prereq.amd_platform.open",
             new_callable=unittest.mock.mock_open,
             read_data=ivrs,
-        ):
-            with patch(
-                "amd_debug.prereq.amd_platform.os.path.exists", return_value=True
-            ):
-                iommu_device = MagicMock(sys_path="/sys/devices/iommu")
-                acpi_device = MagicMock(sys_path="/sys/devices/acpi/MSFT0201")
-                platform_device = MagicMock(
-                    sys_path="/sys/devices/platform/MSFT0201",
-                    attributes={"iommu": MagicMock()},
-                )
-                self.mock_pyudev.list_devices.side_effect = [
-                    [iommu_device],
-                    [acpi_device],
-                    [platform_device],
-                ]
-                result = self.validator.check_iommu()
-                self.assertTrue(result)
-                self.mock_db.record_prereq.assert_called_with(
-                    "IOMMU properly configured", "✅"
-                )
+        ), patch("amd_debug.prereq.amd_platform.os.path.exists", return_value=True):
+            iommu_device = MagicMock(sys_path="/sys/devices/iommu")
+            acpi_device = MagicMock(sys_path="/sys/devices/acpi/MSFT0201")
+            platform_device = MagicMock(
+                sys_path="/sys/devices/platform/MSFT0201",
+                attributes={"iommu": MagicMock()},
+            )
+            self.mock_pyudev.list_devices.side_effect = [
+                [iommu_device],
+                [acpi_device],
+                [platform_device],
+            ]
+            result = self.validator.check_iommu()
+            self.assertTrue(result)
+            self.mock_db.record_prereq.assert_called_with(
+                "IOMMU properly configured", "✅"
+            )
 
     def test_check_iommu_no_dma_protection_type11_msft0201_single_device(self):
         """Test check_iommu for an IVHD type 11h table with valid IVMD mapping."""
         self.validator.cpu_family = 0x1A
         self.validator.cpu_model = 0x20
         from amd_debug.ivrs_fixtures import (
-            make_ivrs_table,
             _pack_ivmd_single_device,
+            make_ivrs_table,
         )
 
         ivrs = make_ivrs_table(
@@ -563,26 +544,23 @@ class TestAmdPrerequisiteValidator(unittest.TestCase):
             "amd_debug.prereq.amd_platform.open",
             new_callable=unittest.mock.mock_open,
             read_data=ivrs,
-        ):
-            with patch(
-                "amd_debug.prereq.amd_platform.os.path.exists", return_value=True
-            ):
-                iommu_device = MagicMock(sys_path="/sys/devices/iommu")
-                acpi_device = MagicMock(sys_path="/sys/devices/acpi/MSFT0201")
-                platform_device = MagicMock(
-                    sys_path="/sys/devices/platform/MSFT0201",
-                    attributes={"iommu": MagicMock()},
-                )
-                self.mock_pyudev.list_devices.side_effect = [
-                    [iommu_device],
-                    [acpi_device],
-                    [platform_device],
-                ]
-                result = self.validator.check_iommu()
-                self.assertTrue(result)
-                self.mock_db.record_prereq.assert_called_with(
-                    "IOMMU properly configured", "✅"
-                )
+        ), patch("amd_debug.prereq.amd_platform.os.path.exists", return_value=True):
+            iommu_device = MagicMock(sys_path="/sys/devices/iommu")
+            acpi_device = MagicMock(sys_path="/sys/devices/acpi/MSFT0201")
+            platform_device = MagicMock(
+                sys_path="/sys/devices/platform/MSFT0201",
+                attributes={"iommu": MagicMock()},
+            )
+            self.mock_pyudev.list_devices.side_effect = [
+                [iommu_device],
+                [acpi_device],
+                [platform_device],
+            ]
+            result = self.validator.check_iommu()
+            self.assertTrue(result)
+            self.mock_db.record_prereq.assert_called_with(
+                "IOMMU properly configured", "✅"
+            )
 
     @patch(
         "amd_debug.prereq.amd_platform.open",
@@ -914,8 +892,8 @@ class TestAmdPrerequisiteValidator(unittest.TestCase):
     )
     def test_capture_disabled_pins_with_parameters(self, _mock_open, mock_path_exists):
         """Test capture_disabled_pins when parameters are present and configured"""
-        mock_path_exists.side_effect = (
-            lambda path: "ignore_wake" in path or "ignore_interrupt" in path
+        mock_path_exists.side_effect = lambda path: (
+            "ignore_wake" in path or "ignore_interrupt" in path
         )
         self.validator.capture_disabled_pins()
         self.mock_db.record_debug.assert_called_with(
@@ -929,8 +907,8 @@ class TestAmdPrerequisiteValidator(unittest.TestCase):
         read_data="(null)",
     )
     def test_capture_disabled_pins_with_null_values(self, _mock_open, mock_path_exists):
-        mock_path_exists.side_effect = (
-            lambda path: "ignore_wake" in path or "ignore_interrupt" in path
+        mock_path_exists.side_effect = lambda path: (
+            "ignore_wake" in path or "ignore_interrupt" in path
         )
         self.validator.capture_disabled_pins()
         self.mock_db.record_debug.assert_not_called()
@@ -946,7 +924,7 @@ class TestAmdPrerequisiteValidator(unittest.TestCase):
     def test_check_pinctrl_amd_driver_loaded(self, mock_path_exists, mock_read_file):
         """Test check_pinctrl_amd when the driver is loaded and debug information is available"""
         mock_read_file.return_value = (
-            "trigger\n" "edge\n" "level\n" "WAKE_INT_MASTER_REG: 8000\n"
+            "trigger\nedge\nlevel\nWAKE_INT_MASTER_REG: 8000\n"
         )
         self.mock_pyudev.list_devices.return_value = [
             MagicMock(properties={"DRIVER": "amd_gpio"})
@@ -1668,9 +1646,7 @@ class TestAmdPrerequisiteValidator(unittest.TestCase):
         """Test check_isp4 when driver is bound but amd_capture or amd_isp4_capture modules are not loaded"""
 
         def exists_side_effect(path):
-            if "/sys/module/" in path or "/sys/bus/platform/" in path:
-                return False
-            return True
+            return not ("/sys/module/" in path or "/sys/bus/platform/" in path)
 
         mock_path_exists.side_effect = exists_side_effect
         self.mock_pyudev.list_devices.return_value = [
@@ -1863,14 +1839,12 @@ class TestAmdCoverageBranches(unittest.TestCase):
         new_callable=mock_open,
         read_data=b"\x00" * 36 + b"\x00" + b"MSFT0201" + b"\x00" * 8,
     )
-    def test_check_iommu_ivrs_parse_error(
-        self, _mock_open, _mock_parser
-    ):
+    def test_check_iommu_ivrs_parse_error(self, _mock_open, _mock_parser):
         """Test the iommu check with an unparsable IVRS table"""
         data = self._iommu_setup()
-        with patch(
-            "builtins.open", mock_open(read_data=data)
-        ), patch("os.path.exists", return_value=True):
+        with patch("builtins.open", mock_open(read_data=data)), patch(
+            "os.path.exists", return_value=True
+        ):
             result = self.validator.check_iommu()
         self.assertFalse(result)
         self.mock_db.record_prereq.assert_any_call(
@@ -1882,9 +1856,9 @@ class TestAmdCoverageBranches(unittest.TestCase):
         """Test the iommu check without the MSFT0201 IVHD entry"""
         mock_parser.return_value.find_msft0201_device_id.return_value = None
         data = self._iommu_setup()
-        with patch(
-            "builtins.open", mock_open(read_data=data)
-        ), patch("os.path.exists", return_value=True):
+        with patch("builtins.open", mock_open(read_data=data)), patch(
+            "os.path.exists", return_value=True
+        ):
             result = self.validator.check_iommu()
         self.assertFalse(result)
         self.mock_db.record_prereq.assert_any_call(

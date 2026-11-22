@@ -1,13 +1,15 @@
 # SPDX-License-Identifier: MIT
 
-from datetime import datetime
 import json
 import logging
+import os
 import sqlite3
 import stat
-import os
+from datetime import datetime
 
 from amd_debug.common import is_root, read_file
+
+logger = logging.getLogger(__name__)
 
 SCHEMA_VERSION = 6
 
@@ -280,8 +282,8 @@ class SleepDatabase:
                             pass
                     cur.execute("DETACH DATABASE shared_db")
                     self.db.commit()
-                except Exception as e:
-                    logging.debug("Could not sync shared capture history: %s", e)
+                except (sqlite3.Error, OSError) as e:
+                    logger.debug("Could not sync shared capture history: %s", e)
 
     def __del__(self) -> None:
         if self.db:

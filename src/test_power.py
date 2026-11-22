@@ -1,4 +1,3 @@
-#!/usr/bin/python3
 # SPDX-License-Identifier: MIT
 """Unit tests for the amd-power tool."""
 
@@ -27,8 +26,15 @@ class TestParseWhen:
 
     @pytest.mark.parametrize(
         "text,secs",
-        [("30", 30), ("30s", 30), ("5m", 300), ("2 hours", 7200), ("1d", 86400),
-         ("1.5h", 5400), ("10 MIN", 600)],
+        [
+            ("30", 30),
+            ("30s", 30),
+            ("5m", 300),
+            ("2 hours", 7200),
+            ("1d", 86400),
+            ("1.5h", 5400),
+            ("10 MIN", 600),
+        ],
     )
     def test_duration(self, text, secs):
         """Durations are relative to now"""
@@ -65,8 +71,20 @@ class TestParseArgs:
 
     def test_plot(self):
         """plot options"""
-        a = args("plot", "o.html", "--rails", "A*", "--rails", "B*",
-                 "--metric", "Power", "--metric", "energy", "--energy-unit", "j")
+        a = args(
+            "plot",
+            "o.html",
+            "--rails",
+            "A*",
+            "--rails",
+            "B*",
+            "--metric",
+            "Power",
+            "--metric",
+            "energy",
+            "--energy-unit",
+            "j",
+        )
         assert a.rails == ["A*", "B*"]
         assert a.metrics == ["power", "energy"]
         assert a.energy_unit == "J"
@@ -127,11 +145,11 @@ class TestRun:
     def test_no_hardware(self, tmp_path):
         """Missing hardware gives rc 1"""
         a = args("run", "--db", str(tmp_path / "p.db"))
-        with patch("amd_debug.power_service.IIO_DEVICES_ROOT", tmp_path / "none"), patch(
-            "amd_debug.power_service.CaptureService.install_signal_handlers"
+        with patch(
+            "amd_debug.power_service.IIO_DEVICES_ROOT", tmp_path / "none"
         ), patch(
-            "amd_debug.power_service.discover_rails", return_value=[]
-        ):
+            "amd_debug.power_service.CaptureService.install_signal_handlers"
+        ), patch("amd_debug.power_service.discover_rails", return_value=[]):
             assert power.cmd_run(a) == 1
 
     def test_ok(self, tmp_path):
@@ -249,23 +267,26 @@ class TestPlot:
     def test_bad_time(self, dbfile, tmp_path):
         """Unparseable window"""
         pytest.importorskip("plotly")
-        a = args("plot", str(tmp_path / "o.html"), "--db", str(dbfile),
-                 "--since", "bogus")
+        a = args(
+            "plot", str(tmp_path / "o.html"), "--db", str(dbfile), "--since", "bogus"
+        )
         assert power.cmd_plot(a) == 1
 
     def test_empty_window(self, dbfile, tmp_path):
         """No samples"""
         pytest.importorskip("plotly")
-        a = args("plot", str(tmp_path / "o.html"), "--db", str(dbfile),
-                 "--rails", "NOPE")
+        a = args(
+            "plot", str(tmp_path / "o.html"), "--db", str(dbfile), "--rails", "NOPE"
+        )
         assert power.cmd_plot(a) == 1
 
     def test_single(self, dbfile, tmp_path):
         """Single metric"""
         pytest.importorskip("plotly")
         out = tmp_path / "o.html"
-        a = args("plot", str(out), "--db", str(dbfile), "--since", "5m",
-                 "--resample", "10s")
+        a = args(
+            "plot", str(out), "--db", str(dbfile), "--since", "5m", "--resample", "10s"
+        )
         assert power.cmd_plot(a) == 0
         assert out.stat().st_size > 0
 
@@ -273,7 +294,19 @@ class TestPlot:
         """Stacked metrics"""
         pytest.importorskip("plotly")
         out = tmp_path / "o.html"
-        a = args("plot", str(out), "--db", str(dbfile), "--since", "5m",
-                 "--metric", "power", "--metric", "energy", "--metric", "aggregate")
+        a = args(
+            "plot",
+            str(out),
+            "--db",
+            str(dbfile),
+            "--since",
+            "5m",
+            "--metric",
+            "power",
+            "--metric",
+            "energy",
+            "--metric",
+            "aggregate",
+        )
         assert power.cmd_plot(a) == 0
         assert out.stat().st_size > 0

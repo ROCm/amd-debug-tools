@@ -5,8 +5,8 @@ This module is a launcher for the AMD Debug Tools package. It is meant for
 launching various tools within the package without installation.
 """
 
-import sys
 import os
+import sys
 
 URL = "https://github.com/amd/amd-linux-debug-tools"
 try:
@@ -25,8 +25,7 @@ def main():
         return amd_debug.launch_tool(os.path.basename(sys.argv[0]))
     except ModuleNotFoundError as e:
         fatal_error(
-            f"Missing dependency: {e}\n"
-            f"Run ./install_deps.py to install dependencies."
+            f"Missing dependency: {e}\nRun ./install_deps.py to install dependencies."
         )
 
 

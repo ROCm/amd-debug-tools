@@ -15,25 +15,27 @@ from datetime import datetime
 
 import pyudev
 
-from amd_debug.wake import WakeIRQ
-from amd_debug.display import Display
-from amd_debug.kernel import get_kernel_log, redact_sensitive
 from amd_debug.common import (
+    AmdTool,
     clear_temporary_message,
     get_distro,
     is_root,
     print_color,
     print_temporary_message,
     read_file,
-    AmdTool,
 )
+from amd_debug.cpu import CpuInfo, parse_cpuinfo
 from amd_debug.database import SleepDatabase
-from amd_debug.cpu import parse_cpuinfo, CpuInfo
+from amd_debug.display import Display
+from amd_debug.kernel import get_kernel_log, redact_sensitive
 from amd_debug.prereq.acpi import AcpiChecks
-from amd_debug.prereq.devices import DeviceChecks
-from amd_debug.prereq.system import SystemChecks
-from amd_debug.prereq.nvidia import NvidiaChecks
 from amd_debug.prereq.base_headers import Headers
+from amd_debug.prereq.devices import DeviceChecks
+from amd_debug.prereq.nvidia import NvidiaChecks
+from amd_debug.prereq.system import SystemChecks
+from amd_debug.wake import WakeIRQ
+
+logger = logging.getLogger(__name__)
 
 
 class PrerequisiteValidator(
@@ -199,7 +201,7 @@ class PrerequisiteValidator(
                 if self.debug:
                     print_color(line, "🦟")
                 else:
-                    logging.debug(line)
+                    logger.debug(line)
 
         if len(self.failures) == 0:
             return

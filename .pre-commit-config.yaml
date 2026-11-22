@@ -1,7 +1,10 @@
 default_stages: [pre-commit]
 repos:
--   repo: https://github.com/ambv/black
-    rev: 25.1.0
+-   repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.17.6
     hooks:
-    - id: black
+    - id: ruff-check
+      args: [--fix]
+      exclude_types: [symlink]
+    - id: ruff-format
       exclude_types: [symlink]

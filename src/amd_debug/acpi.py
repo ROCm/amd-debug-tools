@@ -1,8 +1,11 @@
 # SPDX-License-Identifier: MIT
 
-import os
 import logging
+import os
+
 from amd_debug.common import BIT, read_file
+
+logger = logging.getLogger(__name__)
 
 ACPI_METHOD = "M460"
 
@@ -38,7 +41,7 @@ class AcpicaTracer:
         for key in keys:
             fname = os.path.join(self.acpi_base, key)
             if not os.path.exists(fname):
-                logging.debug("ACPI Notify() debugging not available")
+                logger.debug("ACPI Notify() debugging not available")
                 return
             v = read_file(fname)
             if v and v != "(null)":
@@ -65,7 +68,7 @@ class AcpicaTracer:
             "trace_state": "enable",
         }
         self._write_expected(expected)
-        logging.debug("Enabled ACPI debugging for ACPI_LV_INFO/ACPI_EVENTS")
+        logger.debug("Enabled ACPI debugging for ACPI_LV_INFO/ACPI_EVENTS")
         return True
 
     def trace_bios(self):
@@ -73,7 +76,7 @@ class AcpicaTracer:
         if not self.supported:
             return False
         if not search_acpi_tables(ACPI_METHOD):
-            logging.debug(
+            logger.debug(
                 "will not work on this system: ACPI tables do not contain %s",
                 ACPI_METHOD,
             )
@@ -85,7 +88,7 @@ class AcpicaTracer:
             "trace_state": "method",
         }
         self._write_expected(expected)
-        logging.debug("Enabled ACPI debugging for BIOS")
+        logger.debug("Enabled ACPI debugging for BIOS")
         return True
 
     def disable(self):

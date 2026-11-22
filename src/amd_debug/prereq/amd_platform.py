@@ -128,12 +128,8 @@ class AmdPlatformChecks:
         if self.cpu_family == 0x17:
             if self.cpu_model in [0x68, 0x60]:
                 show_warning = True
-        elif self.cpu_family == 0x19:
-            if self.cpu_model == 0x50:
-                if self.smu_version:
-                    show_warning = version.parse(self.smu_version) < version.parse(
-                        "64.53.0"
-                    )
+        elif self.cpu_family == 0x19 and self.cpu_model == 0x50 and self.smu_version:
+            show_warning = version.parse(self.smu_version) < version.parse("64.53.0")
         if show_warning:
             self.db.record_prereq(
                 "Timer based wakeup doesn't work properly for your "
@@ -182,12 +178,10 @@ class AmdPlatformChecks:
         valid = True
 
         # check for supported models
-        if self.cpu_family == 0x17:
-            if self.cpu_model in range(0x30, 0x3F):
-                valid = False
-        if self.cpu_family == 0x19:
-            if self.cpu_model in [0x08, 0x18]:
-                valid = False
+        if self.cpu_family == 0x17 and self.cpu_model in range(0x30, 0x3F):
+            valid = False
+        if self.cpu_family == 0x19 and self.cpu_model in [0x08, 0x18]:
+            valid = False
 
         if not valid:
             self.failures += [UnsupportedModel()]
@@ -204,7 +198,7 @@ class AmdPlatformChecks:
         # E.4.24 Function 8000_0026—Extended CPU Topology
         try:
             # Need to discover the socket level to look at all CCDs in the socket
-            for level in range(0, 5):
+            for level in range(5):
                 _, _, ecx, _ = read_cpuid(0, 0x80000026, level)
                 level_type = (ecx >> 8) & 0xFF
                 if level_type == 0:
@@ -286,7 +280,7 @@ class AmdPlatformChecks:
             found_ivrs_dmar = (virt_info & 0x2) != 0
 
             # check for MSFT0201 in IVRS (alternative to pre-boot DMA)
-            target_bytes = "MSFT0201".encode("utf-8")
+            target_bytes = b"MSFT0201"
             found_ivrs_msft0201 = data.find(target_bytes) != -1
             debug_str += f"IVRS: Found MSFT0201: {found_ivrs_msft0201}"
 

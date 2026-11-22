@@ -4,19 +4,22 @@
 This module contains installer support for amd-debug-tools.
 """
 
+from __future__ import annotations
+
 import argparse
 import os
 import shutil
 import subprocess
+
 from amd_debug.common import (
-    print_color,
-    get_distro,
-    read_file,
-    systemd_in_use,
-    show_log_info,
-    fatal_error,
-    relaunch_sudo,
     AmdTool,
+    fatal_error,
+    get_distro,
+    print_color,
+    read_file,
+    relaunch_sudo,
+    show_log_info,
+    systemd_in_use,
 )
 
 
@@ -246,13 +249,13 @@ class Installer(AmdTool):
         # test if fwupd can report device firmware versions
         try:
             import gi  # pylint: disable=import-outside-toplevel
-            from gi.repository import (  # pylint: disable=import-outside-toplevel
-                GLib as _,
+            from gi.repository import (  # noqa: F401  # pylint: disable=import-outside-toplevel
+                GLib,
             )
 
             gi.require_version("Fwupd", "2.0")
-            from gi.repository import (  # pylint: disable=import-outside-toplevel
-                Fwupd as _,
+            from gi.repository import (  # noqa: F401  # pylint: disable=import-outside-toplevel
+                Fwupd,
             )
 
             self.fwupd = True
@@ -325,49 +328,49 @@ class Installer(AmdTool):
                 return False
         if "pyudev" in self.requirements:
             try:
-                import pyudev as _  # pylint: disable=import-outside-toplevel
+                import pyudev  # noqa: F401  # pylint: disable=import-outside-toplevel
             except ModuleNotFoundError:
                 package = PyUdevPackage()
                 if not package.install():
                     return False
         if "packaging" in self.requirements:
             try:
-                import packaging as _  # pylint: disable=import-outside-toplevel
+                import packaging  # noqa: F401  # pylint: disable=import-outside-toplevel
             except ModuleNotFoundError:
                 package = PackagingPackage()
                 if not package.install():
                     return False
         if "pandas" in self.requirements:
             try:
-                import pandas as _  # pylint: disable=import-outside-toplevel
+                import pandas  # noqa: F401  # pylint: disable=import-outside-toplevel
             except ModuleNotFoundError:
                 package = PandasPackage()
                 if not package.install():
                     return False
         if "tabulate" in self.requirements:
             try:
-                import tabulate as _  # pylint: disable=import-outside-toplevel
+                import tabulate  # noqa: F401  # pylint: disable=import-outside-toplevel
             except ModuleNotFoundError:
                 package = TabulatePackage()
                 if not package.install():
                     return False
         if "jinja2" in self.requirements:
             try:
-                import jinja2 as _  # pylint: disable=import-outside-toplevel
+                import jinja2  # noqa: F401  # pylint: disable=import-outside-toplevel
             except ModuleNotFoundError:
                 package = Jinja2Package()
                 if not package.install():
                     return False
         if "seaborn" in self.requirements:
             try:
-                import seaborn as _  # pylint: disable=import-outside-toplevel
+                import seaborn  # noqa: F401  # pylint: disable=import-outside-toplevel
             except ModuleNotFoundError:
                 package = SeabornPackage()
                 if not package.install():
                     return False
         if "textual" in self.requirements:
             try:
-                import textual as _  # pylint: disable=import-outside-toplevel
+                import textual  # noqa: F401  # pylint: disable=import-outside-toplevel
             except ModuleNotFoundError:
                 package = TextualPackage()
                 if not package.install():
@@ -424,15 +427,16 @@ class Installer(AmdTool):
             f = "s2idle-hook"
             s = os.path.join(d, f)
             t = os.path.join(self.systemd_path, f)
-            with open(s, "r", encoding="utf-8") as r:
-                with open(t, "w", encoding="utf-8") as w:
-                    for line in r.readlines():
-                        if 'parser.add_argument("--path"' in line:
-                            line = line.replace(
-                                'default=""',
-                                f"default=\"{os.path.join(d, '..')}\"",
-                            )
-                        w.write(line)
+            with open(s, "r", encoding="utf-8") as r, open(
+                t, "w", encoding="utf-8"
+            ) as w:
+                for line in r:
+                    if 'parser.add_argument("--path"' in line:
+                        line = line.replace(
+                            'default=""',
+                            f'default="{os.path.join(d, "..")}"',
+                        )
+                    w.write(line)
             os.chmod(t, 0o755)
             print_color(
                 f"Installed {f} to {self.systemd_path}",

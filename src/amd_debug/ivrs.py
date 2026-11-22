@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import struct
 from abc import ABC, abstractmethod
+from typing import ClassVar
 
 
 class IvrsSubtable(ABC):
@@ -63,7 +64,7 @@ class IvhdEntry(IvrsSubtable):
     TYPE_HID_DEVICE = 0xF0
 
     # IVHD block header lengths by type.
-    HEADER_SIZES = {
+    HEADER_SIZES: ClassVar[dict[int, int]] = {
         0x10: 24,
         0x11: 40,
         0x40: 40,
@@ -103,7 +104,7 @@ class IvhdEntry(IvrsSubtable):
     def subtable_type(self) -> int:
         return self.type
 
-    def find_hid_device(self, hid: str) -> "IvhdDeviceEntry | None":
+    def find_hid_device(self, hid: str) -> IvhdDeviceEntry | None:
         """Find a device entry with the given HID string."""
         for entry in self.device_entries:
             if entry.type == self.TYPE_HID_DEVICE and entry.hid == hid:

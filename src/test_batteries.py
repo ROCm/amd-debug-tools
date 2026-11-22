@@ -1,13 +1,12 @@
-#!/usr/bin/python3
 # SPDX-License-Identifier: MIT
 
 """
 This module contains unit tests for the battery functions in the amd-debug-tools package.
 """
-import unittest
-import logging
-from unittest.mock import MagicMock, patch
 
+import logging
+import unittest
+from unittest.mock import MagicMock, patch
 
 from amd_debug.battery import Batteries
 

@@ -1,4 +1,3 @@
-#!/usr/bin/python3
 # SPDX-License-Identifier: MIT
 
 """
@@ -11,23 +10,22 @@ import tempfile
 import unittest
 from datetime import datetime
 from unittest.mock import patch
+
 import pandas as pd
 from markupsafe import Markup
 
 from amd_debug.sleep_report import (
-    remove_duplicates,
-    format_gpio_as_str,
-    format_irq_as_str,
+    SleepReport,
     format_as_human,
     format_as_seconds,
-    format_watts,
+    format_gpio_as_str,
+    format_irq_as_str,
     format_percent,
     format_timedelta,
+    format_watts,
     parse_hw_sleep,
-    SleepReport,
+    remove_duplicates,
 )
-
-from amd_debug.wake import WakeGPIO, WakeIRQ
 
 
 class TestSleepReportUtils(unittest.TestCase):
@@ -172,14 +170,15 @@ class TestSleepReport(unittest.TestCase):
             fname = os.path.join(tmpdir, "report.txt")
             self.report.fname = fname
 
-            with patch.dict("os.environ", {"SUDO_UID": "1000", "SUDO_GID": "1000"}):
-                with patch("os.fchown") as mock_fchown:
-                    self.report.build_template(inc_prereq=False)
-                    # fchown must have been called exactly once with the real fd
-                    mock_fchown.assert_called_once()
-                    _fd, uid, gid = mock_fchown.call_args[0]
-                    self.assertEqual(uid, 1000)
-                    self.assertEqual(gid, 1000)
+            with patch.dict(
+                "os.environ", {"SUDO_UID": "1000", "SUDO_GID": "1000"}
+            ), patch("os.fchown") as mock_fchown:
+                self.report.build_template(inc_prereq=False)
+                # fchown must have been called exactly once with the real fd
+                mock_fchown.assert_called_once()
+                _fd, uid, gid = mock_fchown.call_args[0]
+                self.assertEqual(uid, 1000)
+                self.assertEqual(gid, 1000)
 
     @patch("matplotlib.pyplot.savefig")
     def test_build_battery_chart(self, mock_savefig):

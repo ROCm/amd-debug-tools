@@ -1,13 +1,12 @@
-#!/usr/bin/python3
 # SPDX-License-Identifier: MIT
 
 """
 This module contains unit tests for the launcher in the amd-debug-tools package.
 """
-from unittest.mock import patch
 
 import logging
 import unittest
+from unittest.mock import patch
 
 import amd_debug
 
@@ -20,7 +19,7 @@ class TestLauncher(unittest.TestCase):
         logging.basicConfig(filename="/dev/null", level=logging.DEBUG)
 
     def setUp(self):
-        launcher = None
+        pass
 
     def test_launcher_unknown(self):
         """Test launching as unknown exe"""

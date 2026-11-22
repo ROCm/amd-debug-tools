@@ -1,16 +1,17 @@
 # SPDX-License-Identifier: MIT
 """Unit tests for power_rails module."""
 
-import pytest
+from __future__ import annotations
+
 from pathlib import Path
-from tempfile import TemporaryDirectory
+
+import pytest
 
 from amd_debug.power_rails import (
     PowerRail,
     PowerRails,
-    discover_rails,
     _discover_chip_rails,
-    SUPPORTED_POWER_CHIPS,
+    discover_rails,
 )
 
 

@@ -5,28 +5,25 @@
 This module contains unit tests for the common functions in the amd-debug-tools package.
 """
 
-from unittest.mock import patch, mock_open, call, Mock
-
-import asyncio
 import builtins
 import logging
+import os
+import sys
 import tempfile
 import unittest
-import os
 from platform import uname_result
-import sys
-
+from unittest.mock import Mock, call, mock_open, patch
 
 from amd_debug.common import (
+    Colors,
     apply_prefix_wrapper,
     bytes_to_gb,
-    Colors,
-    convert_string_to_bool,
-    colorize_choices,
     check_lockdown,
+    colorize_choices,
     compare_file,
-    find_ip_version,
+    convert_string_to_bool,
     fatal_error,
+    find_ip_version,
     gb_to_pages,
     get_distro,
     get_log_priority,
@@ -39,8 +36,8 @@ from amd_debug.common import (
     reboot,
     relaunch_sudo,
     run_countdown,
-    systemd_in_use,
     running_ssh,
+    systemd_in_use,
 )
 
 color_dict = {
@@ -86,10 +83,10 @@ class TestCommon(unittest.TestCase):
     def test_read_compare_file(self):
         """Test read_file and compare_file strip files correctly"""
 
-        f = tempfile.NamedTemporaryFile()
-        f.write("foo bar baz\n ".encode("utf-8"))
-        f.seek(0)
-        self.assertTrue(compare_file(f.name, "foo bar baz"))
+        with tempfile.NamedTemporaryFile() as f:
+            f.write(b"foo bar baz\n ")
+            f.seek(0)
+            self.assertTrue(compare_file(f.name, "foo bar baz"))
 
     def test_countdown(self):
         """Test countdown function"""
@@ -376,7 +373,7 @@ class TestCommon(unittest.TestCase):
         """Test apply_prefix_wrapper function"""
         header = "Header:"
         message = "Line 1\nLine 2\nLine 3"
-        expected_output = "Header:\n" "│ Line 1\n" "│ Line 2\n" "└─ Line 3\n"
+        expected_output = "Header:\n│ Line 1\n│ Line 2\n└─ Line 3\n"
         self.assertEqual(apply_prefix_wrapper(header, message), expected_output)
 
         # Test with a single line message
@@ -391,7 +388,7 @@ class TestCommon(unittest.TestCase):
 
         # Test with leading/trailing whitespace in the message
         message = "  Line 1\nLine 2  \n  Line 3  "
-        expected_output = "Header:\n" "│ Line 1\n" "│ Line 2\n" "└─ Line 3\n"
+        expected_output = "Header:\n│ Line 1\n│ Line 2\n└─ Line 3\n"
         self.assertEqual(apply_prefix_wrapper(header, message), expected_output)
 
     def test_colorize_choices_with_default(self):

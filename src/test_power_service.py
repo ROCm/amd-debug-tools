@@ -1,4 +1,3 @@
-#!/usr/bin/python3
 # SPDX-License-Identifier: MIT
 """Unit tests for the power_service module."""
 
@@ -84,7 +83,7 @@ class TestCaptureService:
             return orig(rails, ids)
 
         s.poll_once = slow
-        with patch("amd_debug.power_service.logging.warning") as warn:
+        with patch("amd_debug.power_service.logger.warning") as warn:
             s.run(interval_s=0.1)
         assert any("falling behind" in c.args[0] for c in warn.call_args_list)
 

@@ -1,6 +1,8 @@
 # SPDX-License-Identifier: MIT
 """Display analysis"""
+
 import os
+
 from pyudev import Context
 
 from amd_debug.common import read_file

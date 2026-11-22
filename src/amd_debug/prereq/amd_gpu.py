@@ -9,10 +9,10 @@ import os
 import re
 
 from amd_debug.common import (
+    BIT,
     find_ip_version,
     get_property_pyudev,
     read_file,
-    BIT,
 )
 from amd_debug.failures import (
     AmdgpuPpFeatureMask,
@@ -49,7 +49,7 @@ class AmdGpuChecks:
 
     def capture_linux_firmware(self):
         """Capture the linux-firmware package version"""
-        for num in range(0, 2):
+        for num in range(2):
             p = os.path.join(
                 "/", "sys", "kernel", "debug", "dri", f"{num}", "amdgpu_firmware_info"
             )

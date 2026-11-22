@@ -1,4 +1,3 @@
-#!/usr/bin/python3
 # SPDX-License-Identifier: MIT
 
 """Unit tests for the IVRS parser implementation."""
@@ -21,7 +20,6 @@ from amd_debug.ivrs_fixtures import (
 
 
 class TestIvrsParser(unittest.TestCase):
-
     def test_rejects_too_small_table(self):
         with self.assertRaises(ValueError):
             IvrsParser(b"\x00" * 47)

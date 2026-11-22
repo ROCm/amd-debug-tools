@@ -1,15 +1,15 @@
-#!/usr/bin/python3
 # SPDX-License-Identifier: MIT
 
 """
 This module contains unit tests for the bios tool in the amd-debug-tools package.
 """
+
 import argparse
 import logging
 import unittest
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
-from amd_debug.bios import AmdBios, parse_args, main
+from amd_debug.bios import AmdBios, main, parse_args
 
 
 class TestAmdBios(unittest.TestCase):

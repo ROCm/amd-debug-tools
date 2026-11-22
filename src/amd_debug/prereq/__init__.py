@@ -9,7 +9,7 @@ specific subclasses.  The :func:`get_validator` helper returns the
 appropriate validator for the running system.
 """
 
-from amd_debug.cpu import get_cpu_info, VENDOR_AMD, VENDOR_INTEL
+from amd_debug.cpu import VENDOR_AMD, VENDOR_INTEL, get_cpu_info
 
 
 def get_validator_class(vendor: str):

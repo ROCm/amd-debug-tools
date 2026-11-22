@@ -1,4 +1,3 @@
-#!/usr/bin/python3
 # SPDX-License-Identifier: MIT
 
 """
@@ -6,26 +5,26 @@ This module contains unit tests for the s2idle tool in the amd-debug-tools packa
 """
 
 import argparse
+import logging
 import os
+import sqlite3
 import sys
 import unittest
-import logging
-import sqlite3
 from datetime import datetime
 from unittest.mock import patch
 
 from amd_debug.s2idle import (
-    parse_args,
-    main,
-    install,
-    uninstall,
-    run_test_cycle,
-    display_report_file,
-    report,
-    run_triage,
-    confirm_triage,
-    prompt_report_arguments,
     Defaults,
+    confirm_triage,
+    display_report_file,
+    install,
+    main,
+    parse_args,
+    prompt_report_arguments,
+    report,
+    run_test_cycle,
+    run_triage,
+    uninstall,
 )
 
 
@@ -1110,10 +1109,10 @@ class TestRunTriage(unittest.TestCase):
             args = parse_args()
         self.assertEqual(args.action, "triage")
         self.assertTrue(args.restart)
-        with patch("sys.argv", ["s2idle.py", "triage", "--count", "2"]):
-            with patch("sys.stderr"):
-                with self.assertRaises(SystemExit):
-                    parse_args()
+        with patch("sys.argv", ["s2idle.py", "triage", "--count", "2"]), patch(
+            "sys.stderr"
+        ), self.assertRaises(SystemExit):
+            parse_args()
 
 
 class TestConfirmTriage(unittest.TestCase):

@@ -1,4 +1,3 @@
-#!/usr/bin/python3
 # SPDX-License-Identifier: MIT
 
 """
@@ -10,11 +9,11 @@ import logging
 import unittest
 from unittest.mock import patch
 
+from amd_debug.cpu import VENDOR_AMD, VENDOR_INTEL
 from amd_debug.prereq import get_validator, get_validator_class
 from amd_debug.prereq.amd import AmdPrerequisiteValidator
 from amd_debug.prereq.base import PrerequisiteValidator
 from amd_debug.prereq.intel import IntelPrerequisiteValidator
-from amd_debug.cpu import VENDOR_AMD, VENDOR_INTEL
 
 
 class TestGetValidatorClass(unittest.TestCase):

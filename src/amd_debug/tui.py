@@ -1,18 +1,19 @@
 # SPDX-License-Identifier: MIT
 """Textual TUI for amd-s2idle"""
 
+from __future__ import annotations
+
 import calendar
 import json
 import os
-import sys
 import queue
 import shutil
-import logging
 import subprocess
+import sys
 import tempfile
-from contextlib import contextmanager, nullcontext
+from contextlib import contextmanager, nullcontext, suppress
 from datetime import date, datetime, timedelta
-from typing import List, Optional
+from typing import ClassVar
 
 from rich.text import Text
 from textual.app import App, ComposeResult
@@ -45,17 +46,13 @@ from amd_debug.installer import Installer
 from amd_debug.prereq import get_validator
 from amd_debug.s2idle import (
     Defaults,
-    Headers,
     get_report_file,
     get_report_format,
 )
 from amd_debug.sleep_report import SleepReport
 from amd_debug.triage import (
-    CYCLE_DURATION,
-    CYCLE_WAIT,
     INSTRUCTIONS,
     STAGE_TITLES,
-    Stage,
     Status,
     Triage,
     format_ts,
@@ -64,7 +61,7 @@ from amd_debug.triage import (
 from amd_debug.validator import SleepValidator
 
 
-def get_s2idle_cmd() -> List[str]:
+def get_s2idle_cmd() -> list[str]:
     """Return command list to execute amd-s2idle CLI"""
     prog = sys.argv[0]
     if os.path.isabs(prog) and os.path.exists(prog):
@@ -77,7 +74,7 @@ def get_s2idle_cmd() -> List[str]:
     return [sys.executable, "-m", "amd_debug.s2idle"]
 
 
-def get_elevation_env_vars() -> List[str]:
+def get_elevation_env_vars() -> list[str]:
     """Collect session environment variables to preserve across elevation"""
     env_vars = []
     for var in [
@@ -93,8 +90,8 @@ def get_elevation_env_vars() -> List[str]:
 
 
 def build_elevated_cmd(
-    base_cmd: List[str], tool: str = "pkexec", extra_env: Optional[List[str]] = None
-) -> List[str]:
+    base_cmd: list[str], tool: str = "pkexec", extra_env: list[str] | None = None
+) -> list[str]:
     """Wrap command with pkexec or sudo preserving environment variables"""
     env_vars = get_elevation_env_vars()
     if extra_env:
@@ -147,7 +144,7 @@ class LogStream:
             if line:
                 try:
                     rendered = Text.from_ansi(line)
-                except Exception:
+                except Exception:  # noqa: BLE001
                     rendered = Text(line)
                 self.app.call_from_thread(self.log_widget.write, rendered)
 
@@ -158,7 +155,7 @@ class LogStream:
             if line:
                 try:
                     rendered = Text.from_ansi(line)
-                except Exception:
+                except Exception:  # noqa: BLE001
                     rendered = Text(line)
                 self.app.call_from_thread(self.log_widget.write, rendered)
 
@@ -188,7 +185,7 @@ class ConfirmModal(ModalScreen[bool]):
     }
     """
 
-    BINDINGS = [
+    BINDINGS: ClassVar[list[Binding]] = [
         Binding("y", "confirm(True)", "Yes"),
         Binding("n", "confirm(False)", "No"),
         Binding("escape", "confirm(False)", "Cancel"),
@@ -226,7 +223,7 @@ class AskQuestionModal(ModalScreen[str]):
     }
     """
 
-    BINDINGS = [
+    BINDINGS: ClassVar[list[Binding]] = [
         Binding("escape", "dismiss_default", "Cancel"),
     ]
 
@@ -471,7 +468,7 @@ class WelcomeScreen(ModalScreen[str]):
     }
     """
 
-    def __init__(self, app_name: Optional[str] = None) -> None:
+    def __init__(self, app_name: str | None = None) -> None:
         super().__init__()
         self.app_name = app_name or tool_name()
 
@@ -505,7 +502,7 @@ class WelcomeScreen(ModalScreen[str]):
 class S2idleApp(App):
     TITLE = "amd-s2idle"
     SUB_TITLE = "Linux s2idle Debug & Analysis Tool"
-    BINDINGS = [
+    BINDINGS: ClassVar[list[Binding]] = [
         Binding("q", "quit", "Quit"),
         Binding("c", "clear_log", "Clear Log"),
         Binding("t", "toggle_log", "Toggle Log"),
@@ -658,7 +655,7 @@ class S2idleApp(App):
     def __init__(
         self,
         tool_debug: bool = False,
-        app_name: Optional[str] = None,
+        app_name: str | None = None,
     ):
         super().__init__()
         os.environ["AMD_S2IDLE_TUI"] = "1"
@@ -697,241 +694,226 @@ class S2idleApp(App):
         try:
             tabbed = self.query_one("#tab-content", TabbedContent)
             tabbed.active = tab_id
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             self.log_message(f"[red]Failed to switch tab: {e}[/red]")
 
     def compose(self) -> ComposeResult:
         yield Header()
         with Vertical(id="main-container"):
             with TabbedContent(initial="tab-triage", id="tab-content"):
-                with TabPane("Triage", id="tab-triage"):
-                    with VerticalScroll():
-                        yield Static(id="triage-status-info")
-                        with Horizontal(classes="form-row"):
-                            yield Label("Format:", classes="form-label")
-                            triage_fmts = [
-                                ("txt", "txt"),
-                                ("md", "md"),
-                                ("html", "html"),
-                            ]
-                            yield Select(
-                                options=triage_fmts,
-                                value="html" if not running_ssh() else "txt",
-                                id="triage-format",
-                                classes="form-select",
+                with TabPane("Triage", id="tab-triage"), VerticalScroll():
+                    yield Static(id="triage-status-info")
+                    with Horizontal(classes="form-row"):
+                        yield Label("Format:", classes="form-label")
+                        triage_fmts = [
+                            ("txt", "txt"),
+                            ("md", "md"),
+                            ("html", "html"),
+                        ]
+                        yield Select(
+                            options=triage_fmts,
+                            value="html" if not running_ssh() else "txt",
+                            id="triage-format",
+                            classes="form-select",
+                        )
+                        yield Label("Report File:", classes="form-label")
+                        yield Input(
+                            placeholder="Leave blank for auto-generated file",
+                            id="triage-report-file",
+                            classes="form-input",
+                        )
+                    with Collapsible(title="Advanced", id="triage-advanced"):
+                        with Horizontal(classes="form-row-switch"):
+                            yield Label("Restart Triage:", classes="form-label")
+                            yield Switch(value=False, id="triage-restart")
+                            yield Label(
+                                "Restart from the beginning of the guided session.",
+                                classes="form-label",
                             )
-                            yield Label("Report File:", classes="form-label")
-                            yield Input(
-                                placeholder="Leave blank for auto-generated file",
-                                id="triage-report-file",
-                                classes="form-input",
+                        with Horizontal(classes="form-row-switch"):
+                            yield Label("Tool Debug:", classes="form-label")
+                            yield Switch(value=self.tool_debug, id="triage-tool-debug")
+                            yield Label(
+                                "Enable verbose tool debugging.",
+                                classes="form-label",
                             )
-                        with Collapsible(title="Advanced", id="triage-advanced"):
-                            with Horizontal(classes="form-row-switch"):
-                                yield Label("Restart Triage:", classes="form-label")
-                                yield Switch(value=False, id="triage-restart")
-                                yield Label(
-                                    "Restart from the beginning of the guided session.",
-                                    classes="form-label",
-                                )
-                            with Horizontal(classes="form-row-switch"):
-                                yield Label("Tool Debug:", classes="form-label")
-                                yield Switch(
-                                    value=self.tool_debug, id="triage-tool-debug"
-                                )
-                                yield Label(
-                                    "Enable verbose tool debugging.",
-                                    classes="form-label",
-                                )
-                        with Horizontal(classes="action-button-row"):
-                            yield Button(
-                                "Export Triage",
-                                variant="default",
-                                id="btn-export-triage",
-                            )
-                            yield Button(
-                                "Start Triage",
-                                variant="primary",
-                                id="btn-run-triage",
-                            )
-                            yield Button(
-                                "Abandon Triage",
-                                variant="error",
-                                id="btn-abandon-triage",
-                            )
+                    with Horizontal(classes="action-button-row"):
+                        yield Button(
+                            "Export Triage",
+                            variant="default",
+                            id="btn-export-triage",
+                        )
+                        yield Button(
+                            "Start Triage",
+                            variant="primary",
+                            id="btn-run-triage",
+                        )
+                        yield Button(
+                            "Abandon Triage",
+                            variant="error",
+                            id="btn-abandon-triage",
+                        )
 
-                with TabPane("Test", id="tab-test"):
-                    with VerticalScroll():
-                        with Horizontal(classes="form-row"):
-                            yield Label("Duration (s):", classes="form-label")
-                            yield Input(
-                                value=str(Defaults.duration),
-                                id="test-duration",
-                                classes="form-input",
-                            )
+                with TabPane("Test", id="tab-test"), VerticalScroll():
+                    with Horizontal(classes="form-row"):
+                        yield Label("Duration (s):", classes="form-label")
+                        yield Input(
+                            value=str(Defaults.duration),
+                            id="test-duration",
+                            classes="form-input",
+                        )
+                        yield Label(
+                            "Length of each suspend/resume cycle.",
+                            classes="form-label",
+                        )
+                    with Horizontal(classes="form-row"):
+                        yield Label("Wait (s):", classes="form-label")
+                        yield Input(
+                            value=str(Defaults.wait),
+                            id="test-wait",
+                            classes="form-input",
+                        )
+                        yield Label(
+                            "Pause between suspend cycles.", classes="form-label"
+                        )
+                    with Horizontal(classes="form-row"):
+                        yield Label("Count:", classes="form-label")
+                        yield Input(
+                            value=str(Defaults.count),
+                            id="test-count",
+                            classes="form-input",
+                        )
+                        yield Label("Number of suspend cycles.", classes="form-label")
+                    with Horizontal(classes="form-row"):
+                        yield Label("Format:", classes="form-label")
+                        fmt_opts = [
+                            (c, c) for c in Defaults.format_choices if c != "stdout"
+                        ]
+                        yield Select(
+                            options=fmt_opts,
+                            value=get_report_format(),
+                            id="test-format",
+                            classes="form-select",
+                        )
+                        yield Label("Output report format.", classes="form-label")
+                    with Horizontal(classes="form-row"):
+                        yield Label("Report File:", classes="form-label")
+                        yield Input(
+                            placeholder="Leave blank for auto-generated file",
+                            id="test-report-file",
+                            classes="form-input",
+                        )
+                        yield Label("Save path (auto if empty).", classes="form-label")
+                    with Collapsible(title="Advanced", id="test-advanced"):
+                        with Horizontal(classes="form-row-switch"):
+                            yield Label("Random:", classes="form-label")
+                            yield Switch(value=False, id="test-random")
                             yield Label(
-                                "Length of each suspend/resume cycle.",
+                                "Randomize suspend timing.", classes="form-label"
+                            )
+                        with Horizontal(classes="form-row-switch"):
+                            yield Label("Logind:", classes="form-label")
+                            yield Switch(value=False, id="test-logind")
+                            yield Label(
+                                "Use logind to manage suspend.",
                                 classes="form-label",
                             )
-                        with Horizontal(classes="form-row"):
-                            yield Label("Wait (s):", classes="form-label")
-                            yield Input(
-                                value=str(Defaults.wait),
-                                id="test-wait",
-                                classes="form-input",
-                            )
+                        with Horizontal(classes="form-row-switch"):
+                            yield Label("Force:", classes="form-label")
+                            yield Switch(value=False, id="test-force")
                             yield Label(
-                                "Pause between suspend cycles.", classes="form-label"
+                                "Run test even if prerequisite checks fail.",
+                                classes="form-label",
                             )
-                        with Horizontal(classes="form-row"):
-                            yield Label("Count:", classes="form-label")
-                            yield Input(
-                                value=str(Defaults.count),
-                                id="test-count",
-                                classes="form-input",
-                            )
+                        with Horizontal(classes="form-row-switch"):
+                            yield Label("Tool Debug:", classes="form-label")
+                            yield Switch(value=self.tool_debug, id="test-tool-debug")
                             yield Label(
-                                "Number of suspend cycles.", classes="form-label"
+                                "Enable verbose tool debugging.",
+                                classes="form-label",
                             )
-                        with Horizontal(classes="form-row"):
-                            yield Label("Format:", classes="form-label")
-                            fmt_opts = [
-                                (c, c) for c in Defaults.format_choices if c != "stdout"
-                            ]
-                            yield Select(
-                                options=fmt_opts,
-                                value=get_report_format(),
-                                id="test-format",
-                                classes="form-select",
-                            )
-                            yield Label("Output report format.", classes="form-label")
-                        with Horizontal(classes="form-row"):
-                            yield Label("Report File:", classes="form-label")
-                            yield Input(
-                                placeholder="Leave blank for auto-generated file",
-                                id="test-report-file",
-                                classes="form-input",
-                            )
+                        with Horizontal(classes="form-row-switch"):
+                            yield Label("BIOS Debug:", classes="form-label")
+                            yield Switch(value=False, id="test-bios-debug")
                             yield Label(
-                                "Save path (auto if empty).", classes="form-label"
+                                "Enable BIOS-level debug output.",
+                                classes="form-label",
                             )
-                        with Collapsible(title="Advanced", id="test-advanced"):
-                            with Horizontal(classes="form-row-switch"):
-                                yield Label("Random:", classes="form-label")
-                                yield Switch(value=False, id="test-random")
-                                yield Label(
-                                    "Randomize suspend timing.", classes="form-label"
-                                )
-                            with Horizontal(classes="form-row-switch"):
-                                yield Label("Logind:", classes="form-label")
-                                yield Switch(value=False, id="test-logind")
-                                yield Label(
-                                    "Use logind to manage suspend.",
-                                    classes="form-label",
-                                )
-                            with Horizontal(classes="form-row-switch"):
-                                yield Label("Force:", classes="form-label")
-                                yield Switch(value=False, id="test-force")
-                                yield Label(
-                                    "Run test even if prerequisite checks fail.",
-                                    classes="form-label",
-                                )
-                            with Horizontal(classes="form-row-switch"):
-                                yield Label("Tool Debug:", classes="form-label")
-                                yield Switch(
-                                    value=self.tool_debug, id="test-tool-debug"
-                                )
-                                yield Label(
-                                    "Enable verbose tool debugging.",
-                                    classes="form-label",
-                                )
-                            with Horizontal(classes="form-row-switch"):
-                                yield Label("BIOS Debug:", classes="form-label")
-                                yield Switch(value=False, id="test-bios-debug")
-                                yield Label(
-                                    "Enable BIOS-level debug output.",
-                                    classes="form-label",
-                                )
-                        with Horizontal(classes="action-button-row"):
-                            yield Button(
-                                "Run Suspend Test",
-                                variant="primary",
-                                id="btn-run-test",
-                            )
+                    with Horizontal(classes="action-button-row"):
+                        yield Button(
+                            "Run Suspend Test",
+                            variant="primary",
+                            id="btn-run-test",
+                        )
 
-                with TabPane("Report", id="tab-report"):
-                    with VerticalScroll():
-                        with Horizontal(classes="form-row"):
-                            yield Label("Since:", classes="form-label")
-                            yield Input(
-                                value=Defaults.since.strftime("%Y-%m-%d"),
-                                id="report-since",
-                                classes="form-input",
-                                placeholder="YYYY-MM-DD",
-                            )
-                            yield Button("📅", variant="default", id="btn-since-picker")
+                with TabPane("Report", id="tab-report"), VerticalScroll():
+                    with Horizontal(classes="form-row"):
+                        yield Label("Since:", classes="form-label")
+                        yield Input(
+                            value=Defaults.since.strftime("%Y-%m-%d"),
+                            id="report-since",
+                            classes="form-input",
+                            placeholder="YYYY-MM-DD",
+                        )
+                        yield Button("📅", variant="default", id="btn-since-picker")
+                        yield Label(
+                            "Include entries after this datetime.",
+                            classes="form-label",
+                        )
+                    with Horizontal(classes="form-row"):
+                        yield Label("Until:", classes="form-label")
+                        yield Input(
+                            value=Defaults.until.strftime("%Y-%m-%d"),
+                            id="report-until",
+                            classes="form-input",
+                            placeholder="YYYY-MM-DD",
+                        )
+                        yield Button("📅", variant="default", id="btn-until-picker")
+                        yield Label(
+                            "Include entries before this datetime.",
+                            classes="form-label",
+                        )
+                    with Horizontal(classes="form-row"):
+                        yield Label("Format:", classes="form-label")
+                        fmt_opts = [
+                            (c, c) for c in Defaults.format_choices if c != "stdout"
+                        ]
+                        yield Select(
+                            options=fmt_opts,
+                            value=get_report_format(),
+                            id="report-format",
+                            classes="form-select",
+                        )
+                        yield Label("Output report format.", classes="form-label")
+                    with Horizontal(classes="form-row"):
+                        yield Label("Report File:", classes="form-label")
+                        yield Input(
+                            placeholder="Leave blank for auto-generated file",
+                            id="report-report-file",
+                            classes="form-input",
+                        )
+                        yield Label("Save path (auto if empty).", classes="form-label")
+                    with Collapsible(title="Advanced", id="report-advanced"):
+                        with Horizontal(classes="form-row-switch"):
+                            yield Label("Report Debug:", classes="form-label")
+                            yield Switch(value=True, id="report-report-debug")
                             yield Label(
-                                "Include entries after this datetime.",
+                                "Include detailed report sections.",
                                 classes="form-label",
                             )
-                        with Horizontal(classes="form-row"):
-                            yield Label("Until:", classes="form-label")
-                            yield Input(
-                                value=Defaults.until.strftime("%Y-%m-%d"),
-                                id="report-until",
-                                classes="form-input",
-                                placeholder="YYYY-MM-DD",
-                            )
-                            yield Button("📅", variant="default", id="btn-until-picker")
+                        with Horizontal(classes="form-row-switch"):
+                            yield Label("Tool Debug:", classes="form-label")
+                            yield Switch(value=self.tool_debug, id="report-tool-debug")
                             yield Label(
-                                "Include entries before this datetime.",
+                                "Enable verbose tool debugging.",
                                 classes="form-label",
                             )
-                        with Horizontal(classes="form-row"):
-                            yield Label("Format:", classes="form-label")
-                            fmt_opts = [
-                                (c, c) for c in Defaults.format_choices if c != "stdout"
-                            ]
-                            yield Select(
-                                options=fmt_opts,
-                                value=get_report_format(),
-                                id="report-format",
-                                classes="form-select",
-                            )
-                            yield Label("Output report format.", classes="form-label")
-                        with Horizontal(classes="form-row"):
-                            yield Label("Report File:", classes="form-label")
-                            yield Input(
-                                placeholder="Leave blank for auto-generated file",
-                                id="report-report-file",
-                                classes="form-input",
-                            )
-                            yield Label(
-                                "Save path (auto if empty).", classes="form-label"
-                            )
-                        with Collapsible(title="Advanced", id="report-advanced"):
-                            with Horizontal(classes="form-row-switch"):
-                                yield Label("Report Debug:", classes="form-label")
-                                yield Switch(value=True, id="report-report-debug")
-                                yield Label(
-                                    "Include detailed report sections.",
-                                    classes="form-label",
-                                )
-                            with Horizontal(classes="form-row-switch"):
-                                yield Label("Tool Debug:", classes="form-label")
-                                yield Switch(
-                                    value=self.tool_debug, id="report-tool-debug"
-                                )
-                                yield Label(
-                                    "Enable verbose tool debugging.",
-                                    classes="form-label",
-                                )
-                        with Horizontal(classes="action-button-row"):
-                            yield Button(
-                                "Generate Report",
-                                variant="primary",
-                                id="btn-run-report",
-                            )
+                    with Horizontal(classes="action-button-row"):
+                        yield Button(
+                            "Generate Report",
+                            variant="primary",
+                            id="btn-run-report",
+                        )
 
             with Container(id="output-container"):
                 with Horizontal(id="output-header-row"):
@@ -947,7 +929,7 @@ class S2idleApp(App):
         log_widget = self.query_one("#output-log", RichLog)
         try:
             rendered = Text.from_markup(message)
-        except Exception:
+        except Exception:  # noqa: BLE001
             rendered = Text(message)
         log_widget.write(rendered)
 
@@ -975,7 +957,7 @@ class S2idleApp(App):
         """Write subprocess stdout/stderr to the execution log"""
         try:
             log_widget = self.query_one("#output-log", RichLog)
-        except Exception:
+        except Exception:  # noqa: BLE001
             return
         combined = []
         stdout = getattr(result, "stdout", None)
@@ -992,7 +974,7 @@ class S2idleApp(App):
             if line:
                 try:
                     rendered = Text.from_ansi(line)
-                except Exception:
+                except Exception:  # noqa: BLE001
                     rendered = Text(line)
                 log_widget.write(rendered)
 
@@ -1005,12 +987,10 @@ class S2idleApp(App):
 
     def _ensure_log_shown(self) -> None:
         """Make sure the log panel is visible"""
-        try:
+        with suppress(Exception):  # May fail in test environment
             container = self.query_one("#output-container")
             if not container.has_class("show-log"):
                 container.add_class("show-log")
-        except Exception:
-            pass  # May fail in test environment
 
     def refresh_triage_status(self) -> None:
         static = self.query_one("#triage-status-info", Static)
@@ -1047,7 +1027,7 @@ class S2idleApp(App):
                 run_btn.label = "Start Triage"
                 abandon_btn.display = False
                 abandon_btn.visible = False
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             static.update(f"Could not read triage database: {e}")
 
     def _set_busy(self, busy: bool, operation: str = "") -> None:
@@ -1059,10 +1039,8 @@ class S2idleApp(App):
             "#btn-run-triage",
             "#btn-abandon-triage",
         ]:
-            try:
+            with suppress(Exception):
                 self.query_one(btn_id, Button).disabled = busy
-            except Exception:
-                pass
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         button_id = event.button.id
@@ -1246,7 +1224,9 @@ class S2idleApp(App):
                 else nullcontext()
             )
             with elevation_ctx:
-                result = subprocess.run(full_cmd, capture_output=True, text=True)
+                result = subprocess.run(
+                    full_cmd, capture_output=True, text=True, check=False
+                )
                 ret = result.returncode
             self._ensure_log_shown()
             self._log_subprocess_output(result)
@@ -1345,7 +1325,7 @@ class S2idleApp(App):
                     self.call_from_thread(
                         self.show_file_notification, fname, fmt, "Test"
                     )
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             self.call_from_thread(
                 self.log_message, f"[bold red]Error running test: {e}[/bold red]"
             )
@@ -1431,7 +1411,7 @@ class S2idleApp(App):
                     self.call_from_thread(
                         self.show_file_notification, fname, fmt, "Report"
                     )
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             self.call_from_thread(
                 self.log_message, f"[bold red]Error generating report: {e}[/bold red]"
             )
@@ -1519,7 +1499,9 @@ class S2idleApp(App):
                 else nullcontext()
             )
             with elevation_ctx:
-                result = subprocess.run(full_cmd, capture_output=True, text=True)
+                result = subprocess.run(
+                    full_cmd, capture_output=True, text=True, check=False
+                )
                 ret = result.returncode
             self._ensure_log_shown()
             self._log_subprocess_output(result)
@@ -1530,7 +1512,7 @@ class S2idleApp(App):
                     if os.path.getsize(result_file) > 0:
                         with open(result_file, "r", encoding="utf-8") as rf:
                             report_info = json.load(rf)
-                except Exception:
+                except Exception:  # noqa: BLE001
                     report_info = None
                 finally:
                     try:
@@ -1548,7 +1530,7 @@ class S2idleApp(App):
                 report_path = report_info["report_path"]
                 report_fmt = report_info.get("fmt", fmt)
             else:
-                try:
+                with suppress(Exception):
                     db = SleepDatabase()
                     cur = db.db.cursor()
                     cur.execute(
@@ -1562,8 +1544,6 @@ class S2idleApp(App):
                                 report_path = ev[2]
                                 report_fmt = ev[3] or fmt
                                 break
-                except Exception:
-                    pass
 
             if ret == 0:
                 if report_path:
@@ -1578,7 +1558,7 @@ class S2idleApp(App):
                     )
                 else:
                     self.log_message("[green]Triage step completed.[/green]")
-                    try:
+                    with suppress(Exception):
                         db = SleepDatabase()
                         active_session = db.triage_get()
                         if (
@@ -1597,8 +1577,6 @@ class S2idleApp(App):
                                 f"Action Required: {STAGE_TITLES.get(stage, stage)}",
                                 f"{instructions}\n\nAfter rebooting, launch {self.app_name} to continue triage.",
                             )
-                    except Exception:
-                        pass
                 return
 
             self.log_message(
@@ -1686,7 +1664,7 @@ class S2idleApp(App):
                         "Triage failed",
                         "Triage did not complete successfully. Check the log for details.",
                     )
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             self.call_from_thread(
                 self.log_message, f"[bold red]Error during triage: {e}[/bold red]"
             )
@@ -1705,7 +1683,7 @@ class S2idleApp(App):
                     "[yellow]All active triage sessions have been abandoned.[/yellow]"
                 )
                 self.refresh_triage_status()
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
                 self.log_message(f"[bold red]Failed to abandon triage: {e}[/bold red]")
 
         self.push_screen(
@@ -1753,7 +1731,7 @@ class S2idleApp(App):
                 f"[green]Triage session exported to: {report_path}[/green]"
             )
             self.show_file_notification(report_path, fmt, "Triage Export")
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             self.log_message(
                 f"[bold red]Failed to export triage session: {e}[/bold red]"
             )

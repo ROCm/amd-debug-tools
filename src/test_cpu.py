@@ -1,4 +1,3 @@
-#!/usr/bin/python3
 # SPDX-License-Identifier: MIT
 
 """
@@ -11,11 +10,11 @@ import unittest
 from unittest.mock import patch
 
 from amd_debug.cpu import (
+    VENDOR_AMD,
+    VENDOR_INTEL,
     CpuInfo,
     get_cpu_info,
     parse_cpuinfo,
-    VENDOR_AMD,
-    VENDOR_INTEL,
 )
 
 INTEL_CPUINFO = (

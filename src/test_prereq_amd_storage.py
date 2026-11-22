@@ -1,4 +1,3 @@
-#!/usr/bin/python3
 # SPDX-License-Identifier: MIT
 
 """
@@ -8,9 +7,8 @@ functions in the amd-debug-tools package.
 
 import logging
 import unittest
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
-from amd_debug.prereq.amd_storage import AmdStorageChecks
 from amd_debug.failures import (
     AcpiNvmeStorageD3Enable,
     DevSlpDiskIssue,
@@ -20,6 +18,7 @@ from amd_debug.failures import (
     MissingXhciHcd,
     WCN6855Bug,
 )
+from amd_debug.prereq.amd_storage import AmdStorageChecks
 
 
 class FakeAmdStorageChecks(AmdStorageChecks):
@@ -160,7 +159,7 @@ class TestAmdStorageChecks(unittest.TestCase):
         """Test check_storage with AHCI not configured for DevSlp"""
         self._mock_devices(ahci=True)
         self.validator.kernel_log.match_pattern.return_value = ""
-        result = self.validator.check_storage()
+        self.validator.check_storage()
         # The AHCI problem is reported, but the overall result depends on
         # the SATA state as well
         self.assertTrue(
@@ -283,7 +282,6 @@ class TestAmdStorageChecks(unittest.TestCase):
         self.assertTrue(
             any(isinstance(f, MissingPcieHotplug) for f in self.validator.failures)
         )
-
 
     def test_check_wcn6855_bug_no_kernel_log(self):
         """Test the wcn6855 check without a kernel log"""

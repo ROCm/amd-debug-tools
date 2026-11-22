@@ -1,4 +1,3 @@
-#!/usr/bin/python3
 # SPDX-License-Identifier: MIT
 
 """
@@ -8,9 +7,8 @@ functions in the amd-debug-tools package.
 
 import logging
 import unittest
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
-from amd_debug.prereq.intel import IntelPrerequisiteValidator
 from amd_debug.failures import (
     IntelDmcFirmwareMissing,
     MissingIntelGraphics,
@@ -18,6 +16,7 @@ from amd_debug.failures import (
     S0ixNotReached,
 )
 from amd_debug.intel import S0IX_SUBSTATES
+from amd_debug.prereq.intel import IntelPrerequisiteValidator
 
 
 class TestIntelPrerequisiteValidator(unittest.TestCase):
@@ -102,9 +101,7 @@ class TestIntelPrerequisiteValidator(unittest.TestCase):
 
     @patch("amd_debug.prereq.intel.get_dmc_firmware_status")
     @patch("amd_debug.prereq.intel.get_intel_graphics_driver")
-    def test_check_intel_dmc_xe_driver_unknown_status(
-        self, mock_driver, mock_status
-    ):
+    def test_check_intel_dmc_xe_driver_unknown_status(self, mock_driver, mock_status):
         """Test check_intel_dmc with xe when the status is unavailable"""
         mock_driver.return_value = "xe"
         mock_status.return_value = {}
@@ -298,7 +295,6 @@ class TestIntelPrerequisiteValidator(unittest.TestCase):
         self.assertEqual(len(S0IX_SUBSTATES), 8)
         self.assertIn("S0i2.0", S0IX_SUBSTATES)
         self.assertIn("S0i3.4", S0IX_SUBSTATES)
-
 
     def test_vendor_lists(self):
         """Test the intel vendor info and check lists"""

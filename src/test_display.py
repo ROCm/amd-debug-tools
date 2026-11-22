@@ -1,4 +1,3 @@
-#!/usr/bin/python3
 # SPDX-License-Identifier: MIT
 
 """
@@ -7,7 +6,8 @@ This module contains unit tests for the display functions in the amd-debug-tools
 
 import logging
 import unittest
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
+
 from amd_debug.display import Display
 
 

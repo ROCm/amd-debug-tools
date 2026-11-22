@@ -11,7 +11,7 @@ import struct
 import subprocess
 import tempfile
 
-from amd_debug.common import read_file, BIT
+from amd_debug.common import BIT, read_file
 from amd_debug.failures import FadtWrong
 
 

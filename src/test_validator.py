@@ -1,23 +1,21 @@
-#!/usr/bin/python3
 # SPDX-License-Identifier: MIT
 
 """
 This module contains unit tests for the validator functions in the amd-debug-tools package.
 """
 
-from unittest.mock import patch, mock_open, Mock, MagicMock, ANY, call
-
-import os
 import logging
+import math
+import os
 import subprocess
 import unittest
-import math
 from datetime import datetime, timedelta
+from unittest.mock import ANY, MagicMock, call, mock_open, patch
 
 from amd_debug.validator import (
+    SleepValidator,
     pm_debugging,
     soc_needs_irq1_wa,
-    SleepValidator,
     toggle_pm_debug,
 )
 
@@ -66,9 +64,8 @@ class TestValidatorHelpers(unittest.TestCase):
         # Mock /sys/power/pm_debug_messages missing
         with patch(
             "amd_debug.validator.core.open", side_effect=FileNotFoundError("not found")
-        ) as mock_file:
-            with self.assertRaises(FileNotFoundError):
-                result = test_function()
+        ) as mock_file, self.assertRaises(FileNotFoundError):
+            result = test_function()
 
 
 class TestValidator(unittest.TestCase):
@@ -90,9 +87,7 @@ class TestValidator(unittest.TestCase):
             "os.path.exists", return_value=True
         ), patch(
             "os.readlink", side_effect=["/usr/bin/kwin_wayland", "/usr/bin/gnome-shell"]
-        ), patch.object(
-            self.validator.db, "record_debug"
-        ) as mock_record_debug:
+        ), patch.object(self.validator.db, "record_debug") as mock_record_debug:
             self.validator.capture_running_compositors()
             mock_record_debug.assert_any_call("kwin_wayland compositor is running")
             mock_record_debug.assert_any_call("gnome-shell compositor is running")
@@ -192,9 +187,7 @@ class TestValidator(unittest.TestCase):
         ), patch(
             "amd_debug.validator.capture.read_file",
             side_effect=["state: open", "state: closed"],
-        ), patch.object(
-            self.validator.db, "record_debug"
-        ) as mock_record_debug:
+        ), patch.object(self.validator.db, "record_debug") as mock_record_debug:
             self.validator.capture_lid()
             mock_record_debug.assert_any_call("ACPI Lid (//lid0): open")
             mock_record_debug.assert_any_call("ACPI Lid (//lid1): closed")
@@ -219,9 +212,7 @@ class TestValidator(unittest.TestCase):
 
     def test_capture_cpu_cstates(self):
         """Test capture_cpu_cstates method"""
-        mock_record_debug = patch.object(
-            self.validator.db, "record_debug"
-        ).start()
+        mock_record_debug = patch.object(self.validator.db, "record_debug").start()
         patch(
             "amd_debug.validator.capture.glob.glob",
             return_value=[
@@ -282,9 +273,7 @@ class TestValidator(unittest.TestCase):
 
     def test_capture_cpu_cstates_s2idle(self):
         """Test that the suspend specific counters are preferred"""
-        mock_record_debug = patch.object(
-            self.validator.db, "record_debug"
-        ).start()
+        mock_record_debug = patch.object(self.validator.db, "record_debug").start()
         self.addCleanup(patch.stopall)
         patch(
             "amd_debug.validator.capture.glob.glob",
@@ -325,9 +314,7 @@ class TestValidator(unittest.TestCase):
 
     def test_capture_cpu_cstates_delta(self):
         """Test capture_cpu_cstates_delta method"""
-        mock_record_debug = patch.object(
-            self.validator.db, "record_debug"
-        ).start()
+        mock_record_debug = patch.object(self.validator.db, "record_debug").start()
         mock_record_cycle_data = patch.object(
             self.validator.db, "record_cycle_data"
         ).start()
@@ -404,9 +391,7 @@ class TestValidator(unittest.TestCase):
             return content_map[path]
 
         patch("os.path.exists", side_effect=fake_exists).start()
-        patch(
-            "amd_debug.validator.capture.read_file", side_effect=fake_read
-        ).start()
+        patch("amd_debug.validator.capture.read_file", side_effect=fake_read).start()
         # stop every patch the test started once it is done, so the mocks
         # can't leak into unrelated tests
         self.addCleanup(patch.stopall)
@@ -415,16 +400,16 @@ class TestValidator(unittest.TestCase):
     def test_capture_wake_sources_parent_types(self):
         """Test the wakeup source naming for every parent type"""
         mock_pyudev = patch.object(self.validator, "pyudev").start()
-        mock_record_debug = patch.object(
-            self.validator.db, "record_debug"
-        ).start()
+        mock_record_debug = patch.object(self.validator.db, "record_debug").start()
         self.addCleanup(patch.stopall)
 
         def make_wake(slot, parent_type, parent_obj):
             dev = unittest.mock.Mock()
             dev.sys_path = f"/sys/devices/{slot}"
-            dev.find_parent.side_effect = lambda subsystem=None, device_type=None, DRIVER=None: (
-                parent_obj if subsystem == parent_type else None
+            dev.find_parent.side_effect = (
+                lambda subsystem=None, device_type=None, DRIVER=None: (
+                    parent_obj if subsystem == parent_type else None
+                )
             )
             dev.properties = {}
             return dev
@@ -438,8 +423,9 @@ class TestValidator(unittest.TestCase):
 
         parents = {
             "i2c": make_parent("", "i2c-DEV"),
-            "thunderbolt": make_parent("thunderbolt_device", "0-1",
-                                       {"USB4_TYPE": "USB4"}),
+            "thunderbolt": make_parent(
+                "thunderbolt_device", "0-1", {"USB4_TYPE": "USB4"}
+            ),
             "serio": make_parent("", "serio0"),
             "rtc": make_parent("", "rtc0"),
             "mhi": make_parent("", "mhi0"),
@@ -449,7 +435,8 @@ class TestValidator(unittest.TestCase):
                 {"HID_NAME": "HID Device"},
             ),
             "pci": make_parent(
-                "", "0000:2b:00.0",
+                "",
+                "0000:2b:00.0",
                 {
                     "ID_PCI_SUBCLASS_FROM_DATABASE": "Network controller",
                     "ID_VENDOR_FROM_DATABASE": "Intel Corporation",
@@ -489,14 +476,14 @@ class TestValidator(unittest.TestCase):
             "amd_debug.validator.capture.os.path.exists",
             side_effect=lambda p: p.endswith("power/wakeup"),
         ).start()
-        patch(
-            "amd_debug.validator.capture.read_file", return_value="enabled"
-        ).start()
+        patch("amd_debug.validator.capture.read_file", return_value="enabled").start()
 
         self.validator.capture_wake_sources()
 
         debug = mock_record_debug.call_args[0][0]
-        self.assertIn("Intel Corporation Network controller|0000:2b:00.0|enabled", debug)
+        self.assertIn(
+            "Intel Corporation Network controller|0000:2b:00.0|enabled", debug
+        )
         self.assertIn("USB4 USB4 controller|0-1|enabled", debug)
         self.assertIn("Some Input|serio0|enabled", debug)
         self.assertIn("Real Time Clock alarm timer|rtc0|enabled", debug)
@@ -509,9 +496,7 @@ class TestValidator(unittest.TestCase):
     def test_capture_wake_sources_no_name_input(self):
         """Test the input sibling lookup without a NAME property"""
         mock_pyudev = patch.object(self.validator, "pyudev").start()
-        mock_record_debug = patch.object(
-            self.validator.db, "record_debug"
-        ).start()
+        mock_record_debug = patch.object(self.validator.db, "record_debug").start()
         self.addCleanup(patch.stopall)
 
         parent = unittest.mock.Mock()
@@ -519,8 +504,10 @@ class TestValidator(unittest.TestCase):
         parent.properties = {}
         wake_dev = unittest.mock.Mock()
         wake_dev.sys_path = "/sys/devices/slot0"
-        wake_dev.find_parent.side_effect = lambda subsystem=None, device_type=None, DRIVER=None: (
-            parent if subsystem == "i2c" else None
+        wake_dev.find_parent.side_effect = (
+            lambda subsystem=None, device_type=None, DRIVER=None: (
+                parent if subsystem == "i2c" else None
+            )
         )
         wake_dev.properties = {}
 
@@ -539,9 +526,7 @@ class TestValidator(unittest.TestCase):
             "amd_debug.validator.capture.os.path.exists",
             return_value=True,
         ).start()
-        patch(
-            "amd_debug.validator.capture.read_file", return_value="enabled"
-        ).start()
+        patch("amd_debug.validator.capture.read_file", return_value="enabled").start()
 
         self.validator.capture_wake_sources()
 
@@ -551,9 +536,7 @@ class TestValidator(unittest.TestCase):
     def test_capture_cpu_cstates_error_branches(self):
         """Test the cpuidle reader error branches"""
         mock_pyudev = patch.object(self.validator, "pyudev").start()
-        patch.object(
-            self.validator.db, "record_debug"
-        ).start()
+        patch.object(self.validator.db, "record_debug").start()
         self.addCleanup(patch.stopall)
         patch(
             "amd_debug.validator.capture.glob.glob",
@@ -579,9 +562,7 @@ class TestValidator(unittest.TestCase):
 
         states = self.validator._read_cpuidle_states()
 
-        self.assertEqual(
-            states, {"state0": ["POLL", 0, 0], "state1": ["C1E", 0, 0]}
-        )
+        self.assertEqual(states, {"state0": ["POLL", 0, 0], "state1": ["C1E", 0, 0]})
         mock_pyudev.list_devices.assert_not_called()
 
     def test_capture_cpu_cstates_delta_no_baseline(self):
@@ -593,32 +574,33 @@ class TestValidator(unittest.TestCase):
 
     def test_capture_pci_power_state_change_new_slot(self):
         """Test that unknown slots are skipped in the post resume diff"""
-        mock_pyudev = patch.object(self.validator, "pyudev").start()
-        mock_record_debug = patch.object(
-            self.validator.db, "record_debug"
-        ).start()
+        patch.object(self.validator, "pyudev").start()
+        mock_record_debug = patch.object(self.validator.db, "record_debug").start()
         self.addCleanup(patch.stopall)
         slot = "0000:00:00.0"
         self.validator.pci_power_state = {slot: ("", "active", "1")}
         patch.object(
             self.validator,
             "_read_pci_power_states",
-            return_value={slot: ("", "active", "1"), "0000:ff:00.0": ("x", "active", "0")},
+            return_value={
+                slot: ("", "active", "1"),
+                "0000:ff:00.0": ("x", "active", "0"),
+            },
         ).start()
 
         self.validator.capture_pci_power_state_change()
 
         self.assertFalse(
-            any("0000:ff:00.0 runtime status changed" in str(c)
-                for c in mock_record_debug.call_args_list)
+            any(
+                "0000:ff:00.0 runtime status changed" in str(c)
+                for c in mock_record_debug.call_args_list
+            )
         )
 
     def test_capture_pci_power_state(self):
         """Test capture_pci_power_state method"""
         mock_pyudev = patch.object(self.validator, "pyudev").start()
-        mock_record_debug = patch.object(
-            self.validator.db, "record_debug"
-        ).start()
+        mock_record_debug = patch.object(self.validator.db, "record_debug").start()
         mock_record_cycle_data = patch.object(
             self.validator.db, "record_cycle_data"
         ).start()
@@ -670,9 +652,7 @@ class TestValidator(unittest.TestCase):
     def test_capture_pci_power_state_change(self):
         """Test capture_pci_power_state_change method"""
         mock_pyudev = patch.object(self.validator, "pyudev").start()
-        mock_record_debug = patch.object(
-            self.validator.db, "record_debug"
-        ).start()
+        mock_record_debug = patch.object(self.validator.db, "record_debug").start()
         mock_record_cycle_data = patch.object(
             self.validator.db, "record_cycle_data"
         ).start()
@@ -788,7 +768,7 @@ class TestValidator(unittest.TestCase):
         mock_os_listdir.return_value = ["trip_point_0_type", "trip_point_0_temp"]
 
         # Call the method
-        result = self.validator.capture_thermal()
+        self.validator.capture_thermal()
 
         # Validate debug messages
         mock_record_debug.assert_any_call("Thermal zones")
@@ -817,8 +797,8 @@ class TestValidator(unittest.TestCase):
         mock_pyudev.list_devices.return_value = [mock_device]
 
         # Mock wakeup file existence and content
-        mock_os_path_exists.side_effect = (
-            lambda path: "wakeup" in path or "wakeup_count" in path
+        mock_os_path_exists.side_effect = lambda path: (
+            "wakeup" in path or "wakeup_count" in path
         )
         mock_read_file.side_effect = ["5"]  # Wakeup count
 
@@ -1033,7 +1013,6 @@ class TestValidator(unittest.TestCase):
         ) as mock_trace_notify, patch.object(
             self.validator.db, "record_cycle"
         ) as mock_record_cycle:
-
             # Mock datetime
             mock_datetime.now.return_value = "mocked_datetime"
 
@@ -1121,7 +1100,6 @@ class TestValidator(unittest.TestCase):
         ) as mock_acpica_restore, patch.object(
             self.validator.db, "record_cycle"
         ) as mock_record_cycle:
-
             # Set mock return values
             mock_analyze_kernel_log.return_value = None
             mock_capture_wakeup_irq_data.return_value = None
@@ -1505,9 +1483,7 @@ class TestValidator(unittest.TestCase):
         the event twice.
         """
         mock_exists.return_value = True
-        with patch.object(
-            self.validator.db, "record_debug"
-        ) as mock_record_debug:
+        with patch.object(self.validator.db, "record_debug") as mock_record_debug:
             result = self.validator.toggle_nvidia(b"suspend")
             self.assertTrue(result)
             mock_open.assert_not_called()
@@ -1614,7 +1590,7 @@ class TestValidator(unittest.TestCase):
         fake = self._fake_dbus(system_bus_exc=True)
         with patch.dict("sys.modules", {"dbus": fake}), patch.object(
             self.validator.db, "record_cycle_data"
-        ) as mock_cycle_data:
+        ):
             self.validator.logind = True
             result = self.validator.unlock_session()
             self.validator.logind = False
@@ -1654,9 +1630,7 @@ class TestValidator(unittest.TestCase):
     def test_capture_power_rails_empty(self):
         """capture_power_rails returns early when no rails detected"""
         self.validator.power_rails.rails = []
-        with patch.object(
-            self.validator.db, "record_power_rail_energy"
-        ) as mock_record:
+        with patch.object(self.validator.db, "record_power_rail_energy") as mock_record:
             self.validator.capture_power_rails()
             mock_record.assert_not_called()
 
@@ -1684,9 +1658,7 @@ class TestValidator(unittest.TestCase):
             rail.read_energy_raw.return_value = energy
             rails.append(rail)
         self.validator.power_rails.rails = rails
-        with patch.object(
-            self.validator.db, "record_power_rail_energy"
-        ) as mock_record:
+        with patch.object(self.validator.db, "record_power_rail_energy") as mock_record:
             self.validator.capture_power_rails()
         self.assertEqual(
             mock_record.call_args_list,
@@ -1704,7 +1676,9 @@ class TestValidator(unittest.TestCase):
         m = mock_open(read_data="2")
         with patch(
             "os.walk",
-            return_value=[("/sys/firmware/acpi/interrupts", [], ["gpe01", "gpe_all", "irq"])],
+            return_value=[
+                ("/sys/firmware/acpi/interrupts", [], ["gpe01", "gpe_all", "irq"])
+            ],
         ), patch("amd_debug.validator.capture.open", m, create=True), patch.object(
             self.validator.db, "record_debug"
         ) as mock_record:
@@ -1734,14 +1708,16 @@ class TestValidator(unittest.TestCase):
         dev = MagicMock(
             device_path="/devices/LNXTHERM:01", sys_path="/sys/devices/LNXTHERM:01"
         )
-        with patch.object(self.validator.pyudev, "list_devices", return_value=[dev]), \
-             patch(
-                 "amd_debug.validator.capture.read_file",
-                 side_effect=["90000", "critical", "50000"],
-             ), \
-             patch("os.listdir", return_value=["trip_point_0_type", "trip_point_0_temp"]), \
-             patch.object(self.validator.db, "record_debug"), \
-             patch.object(self.validator.db, "record_prereq") as mock_prereq:
+        with patch.object(
+            self.validator.pyudev, "list_devices", return_value=[dev]
+        ), patch(
+            "amd_debug.validator.capture.read_file",
+            side_effect=["90000", "critical", "50000"],
+        ), patch(
+            "os.listdir", return_value=["trip_point_0_type", "trip_point_0_temp"]
+        ), patch.object(self.validator.db, "record_debug"), patch.object(
+            self.validator.db, "record_prereq"
+        ) as mock_prereq:
             result = self.validator.capture_thermal()
         self.assertFalse(result)
         mock_prereq.assert_called_once()
@@ -1780,7 +1756,8 @@ class TestValidator(unittest.TestCase):
     def test_capture_command_line(self):
         """capture_command_line records the kernel command line"""
         with patch(
-            "amd_debug.validator.capture.get_kernel_command_line", return_value="quiet x=1"
+            "amd_debug.validator.capture.get_kernel_command_line",
+            return_value="quiet x=1",
         ), patch.object(self.validator.db, "record_debug") as mock_record:
             self.validator.capture_command_line()
             mock_record.assert_called_once_with("/proc/cmdline: quiet x=1")
@@ -1825,6 +1802,7 @@ class TestValidator(unittest.TestCase):
             self.assertIn("42", self.validator.active_gpios)
             # IRQ1 workaround marker
             from amd_debug.validator import Headers as VH
+
             self.validator._analyze_kernel_log_line(VH.Irq1Workaround, 7)  # pylint: disable=protected-access
             self.assertTrue(self.validator.irq1_workaround)
             # Successfully transitioned (AMD GUID)
@@ -1835,11 +1813,9 @@ class TestValidator(unittest.TestCase):
     def test_analyze_kernel_log_idle_mask_bit_change(self):
         """analyze_kernel_log records idle mask bit changes"""
         self.validator.idle_masks = ["0x3", "0x1"]  # bit 1 cleared
-        with patch.object(
-            self.validator.kernel_log, "process_callback"
-        ), patch.object(self.validator.db, "record_debug") as mock_record, patch.object(
-            self.validator.db, "record_cycle_data"
-        ):
+        with patch.object(self.validator.kernel_log, "process_callback"), patch.object(
+            self.validator.db, "record_debug"
+        ) as mock_record, patch.object(self.validator.db, "record_cycle_data"):
             self.validator.analyze_kernel_log()
         # bit 1 changed (0x2)
         self.assertTrue(
@@ -1893,6 +1869,7 @@ class TestValidator(unittest.TestCase):
     def test_analyze_duration_spurious(self, _mock_print):
         """Userspace woke too early -> SpuriousWakeup recorded"""
         from amd_debug.failures import SpuriousWakeup
+
         t0 = datetime(2025, 1, 1, 0, 0, 0)
         t1 = t0 + timedelta(seconds=1)
         self.validator.failures = []
@@ -1905,6 +1882,7 @@ class TestValidator(unittest.TestCase):
     def test_analyze_duration_low_hw_residency(self, _mock_print):
         """Long cycle with low hw% -> LowHardwareSleepResidency recorded"""
         from amd_debug.failures import LowHardwareSleepResidency
+
         t0 = datetime(2025, 1, 1, 0, 0, 0)
         t1 = t0 + timedelta(seconds=120)
         self.validator.failures = []
@@ -1954,8 +1932,6 @@ class TestValidator(unittest.TestCase):
             mock_sync.assert_called_once()
 
 
-
-
 class TestAnalysisBranches(unittest.TestCase):
     """Test the analysis helper branches"""
 
@@ -1966,17 +1942,11 @@ class TestAnalysisBranches(unittest.TestCase):
     def _validator(self):
         with patch("amd_debug.validator.core.SleepDatabase"), patch(
             "amd_debug.validator.core.AmdTool.__init__", return_value=None
-        ), patch(
-            "amd_debug.validator.core.get_kernel_log"
-        ) as mock_log, patch(
+        ), patch("amd_debug.validator.core.get_kernel_log") as mock_log, patch(
             "amd_debug.validator.core.check_lockdown", return_value=False
-        ), patch(
-            "amd_debug.validator.core.Batteries"
-        ), patch(
+        ), patch("amd_debug.validator.core.Batteries"), patch(
             "amd_debug.validator.core.PowerRails"
-        ), patch(
-            "amd_debug.validator.core.AcpicaTracer"
-        ), patch("pyudev.Context"):
+        ), patch("amd_debug.validator.core.AcpicaTracer"), patch("pyudev.Context"):
             validator = SleepValidator(tool_debug=False, bios_debug=False)
         validator.db = MagicMock()
         validator.kernel_log = MagicMock()
@@ -2042,6 +2012,4 @@ class TestAnalysisBranches(unittest.TestCase):
                 1.0,
                 1.0,
             )
-        self.assertTrue(
-            any(isinstance(f, SpuriousWakeup) for f in validator.failures)
-        )
+        self.assertTrue(any(isinstance(f, SpuriousWakeup) for f in validator.failures))

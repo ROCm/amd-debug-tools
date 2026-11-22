@@ -1,8 +1,13 @@
 # SPDX-License-Identifier: MIT
 """s2idle analysis tool"""
+
+from __future__ import annotations
+
 import argparse
 import re
 import sys
+
+from amd_debug.acpi import AcpicaTracer
 from amd_debug.common import (
     AmdTool,
     fatal_error,
@@ -14,7 +19,6 @@ from amd_debug.common import (
     version,
 )
 from amd_debug.kernel import get_kernel_log, sscanf_bios_args
-from amd_debug.acpi import AcpicaTracer
 
 
 class AmdBios(AmdTool):
@@ -129,7 +133,7 @@ def main() -> None | int:
     ret = False
     if args.command == "trace":
         app = AmdBios(None, args.tool_debug)
-        ret = app.set_tracing(True if args.enable else False)
+        ret = app.set_tracing(bool(args.enable))
     elif args.command == "parse":
         app = AmdBios(args.input, args.tool_debug)
         ret = app.run()

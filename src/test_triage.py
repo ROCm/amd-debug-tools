@@ -1,4 +1,3 @@
-#!/usr/bin/python3
 # SPDX-License-Identifier: MIT
 
 """
@@ -9,11 +8,11 @@ import json
 import os
 import tempfile
 import unittest
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
-from amd_debug.database import SleepDatabase
 from amd_debug import triage
-from amd_debug.triage import Triage, Stage, Status, STAGE_TITLES
+from amd_debug.database import SleepDatabase
+from amd_debug.triage import STAGE_TITLES, Stage, Status, Triage
 
 
 def make_triage(answers, fmt="txt", **kwargs):
@@ -140,9 +139,10 @@ class TestTriageFlow(unittest.TestCase):
             t = make_triage(["y", "y"], fname=os.path.join(d, "r.txt"))
             t.start()
             t.set_status(Status.CHANGE_PENDING, stage=Stage.IOMMU, boot_id="boot-a")
-            with patch("amd_debug.triage.get_boot_id", return_value="boot-b"):
-                with patch("amd_debug.triage.iommu_disabled", return_value=True):
-                    self.assertTrue(t.guide_change())
+            with patch("amd_debug.triage.get_boot_id", return_value="boot-b"), patch(
+                "amd_debug.triage.iommu_disabled", return_value=True
+            ):
+                self.assertTrue(t.guide_change())
             t.set_status(Status.RUNNING, boot_id="boot-old")
             with patch.object(triage, "SleepReport") as sr:
                 sr.return_value.build_template.return_value = "S2IDLE REPORT"
@@ -401,9 +401,10 @@ class TestTriageHelpers(unittest.TestCase):
                 self.assertTrue(triage.iommu_disabled())
             with patch("os.listdir", side_effect=PermissionError):
                 self.assertFalse(triage.iommu_disabled())
-        with patch("amd_debug.triage.read_file", side_effect=OSError):
-            with patch("os.listdir", return_value=["ivhd0"]):
-                self.assertFalse(triage.iommu_disabled())
+        with patch("amd_debug.triage.read_file", side_effect=OSError), patch(
+            "os.listdir", return_value=["ivhd0"]
+        ):
+            self.assertFalse(triage.iommu_disabled())
 
     def test_dmi_info(self):
         """DMI info skips unreadable fields"""
@@ -491,9 +492,10 @@ class TestTriageMore(unittest.TestCase):
         t = make_triage(["y", "y"])
         t.start()
         t.set_status(Status.CHANGE_PENDING, stage=Stage.IOMMU, boot_id="boot-a")
-        with patch("amd_debug.triage.get_boot_id", return_value="boot-b"):
-            with patch("amd_debug.triage.iommu_disabled", return_value=False):
-                self.assertTrue(t.guide_change())
+        with patch("amd_debug.triage.get_boot_id", return_value="boot-b"), patch(
+            "amd_debug.triage.iommu_disabled", return_value=False
+        ):
+            self.assertTrue(t.guide_change())
 
     def test_prereq_pass(self, *_):
         """Passing prerequisites are logged"""
@@ -613,9 +615,10 @@ class TestTriageMore(unittest.TestCase):
             t.session = t.db.triage_get(t.session["id"])
             with patch.object(triage, "SleepReport") as sr:
                 sr.return_value.build_template.return_value = "x"
-                with patch.dict(os.environ, {"SUDO_UID": "1", "SUDO_GID": "2"}):
-                    with patch("os.fchown", side_effect=OSError):
-                        self.assertEqual(t.build_report(), fname)
+                with patch.dict(os.environ, {"SUDO_UID": "1", "SUDO_GID": "2"}), patch(
+                    "os.fchown", side_effect=OSError
+                ):
+                    self.assertEqual(t.build_report(), fname)
                 os.remove(fname)
                 env = {k: v for k, v in os.environ.items() if k != "SUDO_GID"}
                 env["SUDO_UID"] = "1"
@@ -776,9 +779,10 @@ class TestTriageRun(unittest.TestCase):
     def test_keyboard_interrupt(self, *_):
         """Ctrl-C exits with a hint"""
         t = make_triage(["y"])
-        with patch.object(t, "run_prereqs", side_effect=KeyboardInterrupt):
-            with self.assertRaises(SystemExit):
-                t.run()
+        with patch.object(
+            t, "run_prereqs", side_effect=KeyboardInterrupt
+        ), self.assertRaises(SystemExit):
+            t.run()
 
     def test_iommu_unverified_override_outcome(self, *_):
         """Unverified IOMMU override concludes with inconclusive outcome"""

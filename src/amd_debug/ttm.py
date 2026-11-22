@@ -1,6 +1,8 @@
 # SPDX-License-Identifier: MIT
 """TTM configuration tool"""
 
+from __future__ import annotations
+
 import argparse
 import glob
 import os

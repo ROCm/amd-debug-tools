@@ -94,9 +94,7 @@ class IntelCaptureHelpers:
         # it when the suspend stats interface is unavailable
         self.s0ix_residency = residency
         if residency > 0:
-            self.db.record_cycle_data(
-                f"Spent {residency:.2f} seconds in S0ix", "💤"
-            )
+            self.db.record_cycle_data(f"Spent {residency:.2f} seconds in S0ix", "💤")
         return residency
 
     def capture_intel_substate_delta(self):

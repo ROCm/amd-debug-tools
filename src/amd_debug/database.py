@@ -2,12 +2,14 @@
 
 from datetime import datetime
 import json
+import logging
 import sqlite3
+import stat
 import os
 
-from amd_debug.common import read_file
+from amd_debug.common import is_root, read_file
 
-SCHEMA_VERSION = 5
+SCHEMA_VERSION = 6
 
 
 TRIAGE_TABLE = (
@@ -29,6 +31,7 @@ TRIAGE_EVENT_TABLE = (
     "kind TEXT, "
     "message TEXT, "
     "answer TEXT, "
+    "verified INTEGER, "
     "PRIMARY KEY(session, id))"
 )
 
@@ -39,11 +42,14 @@ def migrate(cur, user_version) -> None:
     val = cur.fetchone()[0]
     # Schema 1
     # - add priority column
-    if val == 0:
-        cur.execute("ALTER TABLE debug ADD COLUMN priority INTEGER")
+    if val < 1:
+        cur.execute("PRAGMA table_info(debug)")
+        cols = [col[1] for col in cur.fetchall()]
+        if "priority" not in cols:
+            cur.execute("ALTER TABLE debug ADD COLUMN priority INTEGER")
     # Schema 2
     # - add power_rails table
-    if val == 1:
+    if val < 2:
         cur.execute(
             "CREATE TABLE IF NOT EXISTS power_rails ("
             "t0 INTEGER, "
@@ -55,7 +61,7 @@ def migrate(cur, user_version) -> None:
         )
     # Schema 3
     # - add s0ix table
-    if val == 2:
+    if val < 3:
         cur.execute(
             "CREATE TABLE IF NOT EXISTS s0ix ("
             "t0 INTEGER PRIMARY KEY, "
@@ -64,7 +70,7 @@ def migrate(cur, user_version) -> None:
         )
     # Schema 4
     # - add pci_power table
-    if val == 3:
+    if val < 4:
         cur.execute(
             "CREATE TABLE IF NOT EXISTS pci_power ("
             "t0 INTEGER, "
@@ -76,12 +82,48 @@ def migrate(cur, user_version) -> None:
         )
     # Schema 5
     # - add triage and triage_event tables
-    if val == 4:
+    if val < 5:
         cur.execute(TRIAGE_TABLE)
         cur.execute(TRIAGE_EVENT_TABLE)
+    # Schema 6
+    # - add verified column to triage_event
+    if val < 6:
+        cur.execute("PRAGMA table_info(triage_event)")
+        cols = [col[1] for col in cur.fetchall()]
+        if "verified" not in cols:
+            cur.execute("ALTER TABLE triage_event ADD COLUMN verified INTEGER")
+            # Backfill from the prose messages written before the column existed
+            cur.execute(
+                "UPDATE triage_event SET verified=0 WHERE kind='action' "
+                "AND message LIKE '%Change applied (unverified)%'"
+            )
+            cur.execute(
+                "UPDATE triage_event SET verified=1 WHERE kind='action' "
+                "AND message LIKE 'Change applied:%' "
+                "AND message NOT LIKE '%(unverified)%'"
+            )
     # Update schema if necessary
     if val != user_version:
         cur.execute(f"PRAGMA user_version = {user_version}")
+
+
+def default_database_path() -> str:
+    """Return default database file path based on the user launching the tool"""
+    if "AMD_S2IDLE_DB" in os.environ:
+        return os.environ["AMD_S2IDLE_DB"]
+    xdg_data = os.environ.get("XDG_DATA_HOME")
+    if xdg_data:
+        return os.path.join(xdg_data, "data.db")
+    user = os.environ.get("SUDO_USER")
+    if user:
+        home = os.path.expanduser(f"~{user}")
+        path = os.path.join(home, ".local", "share", "amd-debug-tools")
+        return os.path.join(path, "data.db")
+    if is_root():
+        return os.path.join("/", "var", "lib", "amd-s2idle", "data.db")
+    home = os.path.expanduser("~")
+    path = os.path.join(home, ".local", "share", "amd-debug-tools")
+    return os.path.join(path, "data.db")
 
 
 class SleepDatabase:
@@ -94,10 +136,49 @@ class SleepDatabase:
         self.debug_cnt = 0
 
         if not dbf:
-            path = os.path.join("/", "var", "lib", "amd-s2idle")
-            os.makedirs(path, mode=0o700, exist_ok=True)
-            dbf = os.path.join(path, "data.db")
-        new = not os.path.exists(dbf)
+            dbf = default_database_path()
+        if dbf != ":memory:":
+            dbf_path = os.path.abspath(dbf)
+            cur_p = dbf_path
+            while cur_p and cur_p != "/":
+                if os.path.islink(cur_p):
+                    raise ValueError(f"Database path contains a symlink: {cur_p}")
+                cur_p = os.path.dirname(cur_p)
+            new = not os.path.exists(dbf_path) or os.path.getsize(dbf_path) == 0
+            path = os.path.dirname(dbf_path)
+            os.makedirs(path, mode=0o755, exist_ok=True)
+            if "SUDO_UID" in os.environ and "SUDO_GID" in os.environ:
+                try:
+                    os.lchown(
+                        path, int(os.environ["SUDO_UID"]), int(os.environ["SUDO_GID"])
+                    )
+                except OSError:
+                    pass
+            try:
+                fd = os.open(
+                    dbf_path,
+                    os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW,
+                    stat.S_IRUSR | stat.S_IWUSR | stat.S_IRGRP | stat.S_IROTH,
+                )
+                os.close(fd)
+            except OSError:
+                pass
+            if (
+                "SUDO_UID" in os.environ
+                and "SUDO_GID" in os.environ
+                and os.path.exists(dbf_path)
+            ):
+                try:
+                    os.lchown(
+                        dbf_path,
+                        int(os.environ["SUDO_UID"]),
+                        int(os.environ["SUDO_GID"]),
+                    )
+                except OSError:
+                    pass
+            dbf = dbf_path
+        else:
+            new = True
         self.db = sqlite3.connect(dbf)
         cur = self.db.cursor()
         cur.execute(
@@ -175,6 +256,32 @@ class SleepDatabase:
             cur.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
         else:
             migrate(cur, SCHEMA_VERSION)
+
+        if dbf != ":memory:":
+            shared_var_lib = os.path.join("/", "var", "lib", "amd-s2idle", "data.db")
+            if os.path.exists(shared_var_lib) and os.path.realpath(
+                dbf
+            ) != os.path.realpath(shared_var_lib):
+                try:
+                    cur.execute("ATTACH DATABASE ? AS shared_db", (shared_var_lib,))
+                    for table in [
+                        "sleep_cycles",
+                        "debug",
+                        "failures",
+                        "sleep_metrics",
+                        "power_rails",
+                        "s0ix",
+                    ]:
+                        try:
+                            cur.execute(
+                                f"INSERT OR IGNORE INTO {table} SELECT * FROM shared_db.{table}"
+                            )
+                        except sqlite3.OperationalError:
+                            pass
+                    cur.execute("DETACH DATABASE shared_db")
+                    self.db.commit()
+                except Exception as e:
+                    logging.debug("Could not sync shared capture history: %s", e)
 
     def __del__(self) -> None:
         if self.db:
@@ -618,8 +725,12 @@ class SleepDatabase:
         )
         self.db.commit()
 
-    def triage_log(self, session, kind, message, answer=None) -> None:
-        """Record an event (info, question, action, result) for a session"""
+    def triage_log(self, session, kind, message, answer=None, verified=None) -> None:
+        """Record an event (info, question, action, result) for a session
+
+        verified is a structured flag for 'Change applied' action events:
+        True if the change was verified, False if it was not.
+        """
         assert self.db
         cur = self.db.cursor()
         cur.execute(
@@ -629,8 +740,8 @@ class SleepDatabase:
         idx = cur.fetchone()[0]
         cur.execute(
             """
-            INSERT INTO triage_event (session, id, ts, kind, message, answer)
-            VALUES (?, ?, ?, ?, ?, ?)
+            INSERT INTO triage_event (session, id, ts, kind, message, answer, verified)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 session,
@@ -639,16 +750,17 @@ class SleepDatabase:
                 kind,
                 message,
                 answer,
+                verified,
             ),
         )
         self.db.commit()
 
     def triage_events(self, session) -> list:
-        """Fetch the events of a session as (ts, kind, message, answer)"""
+        """Fetch the events of a session as (ts, kind, message, answer, verified)"""
         assert self.db
         cur = self.db.cursor()
         cur.execute(
-            "SELECT ts, kind, message, answer FROM triage_event "
+            "SELECT ts, kind, message, answer, verified FROM triage_event "
             "WHERE session=? ORDER BY id",
             (session,),
         )

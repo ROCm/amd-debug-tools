@@ -9,9 +9,11 @@ what was being tested and what to ask them to change next.
 """
 
 import html
+import json
 import os
 import stat
 import sys
+import tempfile
 from typing import Optional
 from datetime import date, datetime, timedelta
 
@@ -249,7 +251,7 @@ DMI_FIELDS = [
 
 def tool_name() -> str:
     """Name the tool was launched as, to use in instructions"""
-    if os.path.basename(sys.argv[0]) == "s2idle":
+    if os.path.basename(sys.argv[0]) in ("s2idle", "s2idle.py"):
         return "s2idle"
     return "amd-s2idle"
 
@@ -363,9 +365,9 @@ class Triage:
             text.replace("{tool}", self.tool).replace("{triage_cmd}", self.triage_cmd)
         )
 
-    def log(self, kind, message, answer=None) -> None:
+    def log(self, kind, message, answer=None, verified=None) -> None:
         """Record an event in the triage history"""
-        self.db.triage_log(self.session["id"], kind, message, answer)
+        self.db.triage_log(self.session["id"], kind, message, answer, verified)
 
     def question(self, prompt, default=True) -> bool:
         """Ask a yes/no question and record it and the answer"""
@@ -462,10 +464,30 @@ class Triage:
         self.log("result", f"{STAGE_TITLES[stage]}: system hung")
         nxt = NEXT_STAGE[stage]
         if nxt is None:
-            self.conclude("hang_persists")
+            if not self.is_change_verified(stage):
+                self.conclude("inconclusive_unverified_" + stage)
+            else:
+                self.conclude("hang_persists")
             return False
         self.set_status(Status.CHANGE_PENDING, stage=nxt, boot_id="")
         return True
+
+    def is_change_verified(self, stage) -> bool:
+        """Check whether the change for the given stage was verified
+
+        Reads the structured verified flag recorded when the change was
+        applied. Fails closed: without a recorded change the hang can't be
+        attributed to the stage.
+        """
+        title = STAGE_TITLES[stage]
+        events = self.db.triage_events(self.session["id"])
+        for _, kind, msg, _, verified in reversed(events):
+            if kind == "action" and msg in (
+                f"Change applied: {title}",
+                f"Change applied (unverified): {title}",
+            ):
+                return bool(verified)
+        return False
 
     def guide_change(self) -> bool:
         """Walk the user through the change needed for the current stage"""
@@ -495,15 +517,27 @@ class Triage:
             return False
 
         if stage == Stage.IOMMU:
+            verified = True
             if not iommu_disabled():
                 self.say("The IOMMU still appears to be enabled.", "❌")
                 self.log("result", "IOMMU still enabled after reboot")
                 if not self.question("Do you want to run the test anyway", False):
                     self.say_block(IOMMU_INSTRUCTIONS)
                     return False
+                verified = False
             else:
                 self.say("Verified the IOMMU is disabled", "✅")
                 self.log("result", "Verified IOMMU is disabled")
+            if verified:
+                self.log(
+                    "action", f"Change applied: {STAGE_TITLES[stage]}", verified=True
+                )
+            else:
+                self.log(
+                    "action",
+                    f"Change applied (unverified): {STAGE_TITLES[stage]}",
+                    verified=False,
+                )
         else:
             # BIOS settings can't be read back, so rely on what the user says
             if not self.question(
@@ -511,7 +545,7 @@ class Triage:
             ):
                 self.say_block(INSTRUCTIONS[stage])
                 return False
-        self.log("action", f"Change applied: {STAGE_TITLES[stage]}")
+            self.log("action", f"Change applied: {STAGE_TITLES[stage]}", verified=True)
         self.set_status(Status.READY)
         return True
 
@@ -594,6 +628,8 @@ class Triage:
         self.log("result", f"{STAGE_TITLES[stage]}: test completed without hanging")
         if stage == Stage.BASELINE:
             self.conclude("no_hang")
+        elif not self.is_change_verified(stage):
+            self.conclude("inconclusive_unverified_" + stage)
         else:
             self.conclude("fixed_by_" + stage)
         return True
@@ -626,6 +662,12 @@ class Triage:
             "or the BIOS) or the Linux IOMMU driver. Report it including this "
             "report."
         ),
+        "inconclusive_unverified_"
+        + Stage.IOMMU: (
+            "The test was run without verifying that the IOMMU was disabled. "
+            "The result is inconclusive because the IOMMU may still have been "
+            "active. Verify that the IOMMU is disabled and retry the triage."
+        ),
         "hang_persists": (
             "The system still hung with the BIOS at default settings and the "
             "IOMMU disabled. The common BIOS configuration and IOMMU causes "
@@ -644,7 +686,7 @@ class Triage:
             f"Finished: {format_ts(session['updated'])}",
             "",
         ]
-        for ts, kind, message, answer in self.db.triage_events(session["id"]):
+        for ts, kind, message, answer, _ in self.db.triage_events(session["id"]):
             prefix = {
                 "question": "Q",
                 "action": "Action",
@@ -728,6 +770,32 @@ class Triage:
         print(self.format_history(session))
         self.say(f"Triage report written to {fname}", "✅")
         self.report_path = fname
+        self.db.triage_log(session["id"], "report", fname, answer=self.fmt)
+        result_file = os.environ.get("AMD_S2IDLE_RESULT_FILE")
+        if result_file:
+            # The TUI (an unprivileged process) sets this to a mkstemp path and
+            # the tool may run as root, so only honor it when it points into
+            # the temp dir; otherwise it would be a file-write primitive.
+            tmpdir = os.path.realpath(tempfile.gettempdir())
+            real = os.path.realpath(result_file)
+            if real == tmpdir or real.startswith(tmpdir + os.sep):
+                try:
+                    flags = os.O_WRONLY | os.O_TRUNC | os.O_NOFOLLOW
+                    try:
+                        fd = os.open(result_file, flags)
+                    except OSError:
+                        fd = os.open(
+                            result_file,
+                            flags | os.O_CREAT,
+                            mode=stat.S_IRUSR
+                            | stat.S_IWUSR
+                            | stat.S_IRGRP
+                            | stat.S_IROTH,
+                        )
+                    with os.fdopen(fd, "w", encoding="utf-8") as rf:
+                        json.dump({"report_path": fname, "fmt": self.fmt}, rf)
+                except OSError:
+                    pass
         return fname
 
     # -- main ------------------------------------------------------------

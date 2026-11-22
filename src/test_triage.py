@@ -5,6 +5,7 @@
 This module contains unit tests for the triage mode in the amd-debug-tools package.
 """
 
+import json
 import os
 import tempfile
 import unittest
@@ -12,7 +13,7 @@ from unittest.mock import patch, MagicMock
 
 from amd_debug.database import SleepDatabase
 from amd_debug import triage
-from amd_debug.triage import Triage, Stage, Status
+from amd_debug.triage import Triage, Stage, Status, STAGE_TITLES
 
 
 def make_triage(answers, fmt="txt", **kwargs):
@@ -138,7 +139,11 @@ class TestTriageFlow(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             t = make_triage(["y", "y"], fname=os.path.join(d, "r.txt"))
             t.start()
-            t.set_status(Status.RUNNING, stage=Stage.IOMMU, boot_id="boot-old")
+            t.set_status(Status.CHANGE_PENDING, stage=Stage.IOMMU, boot_id="boot-a")
+            with patch("amd_debug.triage.get_boot_id", return_value="boot-b"):
+                with patch("amd_debug.triage.iommu_disabled", return_value=True):
+                    self.assertTrue(t.guide_change())
+            t.set_status(Status.RUNNING, boot_id="boot-old")
             with patch.object(triage, "SleepReport") as sr:
                 sr.return_value.build_template.return_value = "S2IDLE REPORT"
                 self.assertFalse(t.resume(t.db.triage_get()))
@@ -151,12 +156,43 @@ class TestTriageFlow(unittest.TestCase):
             self.assertIn("S2IDLE REPORT", content)
             self.assertIn("Did the system hang", content)
 
+    def test_final_hang_unverified_change(self, *_):
+        """A hang without a verified change is inconclusive"""
+        with tempfile.TemporaryDirectory() as d:
+            t = make_triage(["y", "y"], fname=os.path.join(d, "r.txt"))
+            t.start()
+            t.set_status(Status.RUNNING, stage=Stage.IOMMU, boot_id="boot-old")
+            with patch.object(triage, "SleepReport") as sr:
+                sr.return_value.build_template.return_value = "S2IDLE REPORT"
+                self.assertFalse(t.resume(t.db.triage_get()))
+            self.assertEqual(
+                t.db.triage_get(t.session["id"])["outcome"],
+                "inconclusive_unverified_iommu",
+            )
+
+    def test_is_change_verified(self, *_):
+        """The structured verified flag decides; a missing event fails closed"""
+        t = make_triage(["y"])
+        t.start()
+        title = "IOMMU disabled"
+        # no recorded change -> fail closed
+        self.assertFalse(t.is_change_verified(Stage.IOMMU))
+        t.log("action", f"Change applied (unverified): {title}", verified=False)
+        self.assertFalse(t.is_change_verified(Stage.IOMMU))
+        t.log("action", f"Change applied: {title}", verified=True)
+        self.assertTrue(t.is_change_verified(Stage.IOMMU))
+
     def test_completed_test(self, *_):
-        """A test that finishes in a later stage credits the change"""
+        """A test that finishes in a later stage credits the verified change"""
         with tempfile.TemporaryDirectory() as d:
             t = make_triage(["y"], fname=os.path.join(d, "r.txt"))
             t.start()
             t.set_status(Status.READY, stage=Stage.BIOS_DEFAULTS)
+            t.log(
+                "action",
+                f"Change applied: {STAGE_TITLES[Stage.BIOS_DEFAULTS]}",
+                verified=True,
+            )
             with patch.object(triage, "SleepReport") as sr, patch.object(
                 triage, "SleepValidator"
             ) as sv:
@@ -640,6 +676,31 @@ class TestTriageMore(unittest.TestCase):
             sr.return_value.build_template.return_value = "x"
             self.assertIsNone(t.build_report())
 
+    def test_result_file_guard(self, *_):
+        """The result file is only written when it points into the temp dir"""
+        with tempfile.TemporaryDirectory() as d:
+            fname = os.path.join(d, "r.txt")
+            t = make_triage(["y"], fname=fname)
+            t.start()
+            t.session = t.db.triage_get(t.session["id"])
+            with patch.object(triage, "SleepReport") as sr:
+                sr.return_value.build_template.return_value = "x"
+                # A path inside the temp dir (as the TUI creates with mkstemp)
+                # is honored
+                fd, inside = tempfile.mkstemp(prefix="amd_s2idle_triage_")
+                os.close(fd)
+                self.addCleanup(os.remove, inside)
+                with patch.dict(os.environ, {"AMD_S2IDLE_RESULT_FILE": inside}):
+                    self.assertEqual(t.build_report(), fname)
+                with open(inside, encoding="utf-8") as f:
+                    self.assertEqual(json.load(f), {"report_path": fname, "fmt": "txt"})
+                # A path outside the temp dir is ignored (no file-write primitive)
+                outside = os.path.join(os.getcwd(), "evil_result.json")
+                self.addCleanup(lambda: os.path.exists(outside) and os.remove(outside))
+                with patch.dict(os.environ, {"AMD_S2IDLE_RESULT_FILE": outside}):
+                    t.build_report()
+                self.assertFalse(os.path.exists(outside))
+
 
 @patch("amd_debug.triage.get_boot_id", return_value="boot-a")
 @patch("amd_debug.triage.print_color")
@@ -718,6 +779,60 @@ class TestTriageRun(unittest.TestCase):
         with patch.object(t, "run_prereqs", side_effect=KeyboardInterrupt):
             with self.assertRaises(SystemExit):
                 t.run()
+
+    def test_iommu_unverified_override_outcome(self, *_):
+        """Unverified IOMMU override concludes with inconclusive outcome"""
+        t = make_triage(["y", "y"])
+        t.start()
+        t.set_status(Status.CHANGE_PENDING, stage=Stage.IOMMU, boot_id="boot-a")
+        with patch("amd_debug.triage.get_boot_id", return_value="boot-b"), patch(
+            "amd_debug.triage.iommu_disabled", return_value=False
+        ):
+            self.assertTrue(t.guide_change())
+        with patch("amd_debug.triage.SleepValidator") as mock_val, patch.object(
+            t, "build_report"
+        ):
+            mock_val.return_value.run.return_value = True
+            self.assertTrue(t.run_test())
+        self.assertEqual(
+            t.db.triage_get(t.session["id"])["outcome"],
+            "inconclusive_unverified_iommu",
+        )
+
+    def test_iommu_unverified_hang_outcome(self, *_):
+        """Unverified IOMMU override that hangs concludes with inconclusive outcome"""
+        t = make_triage(["y", "y", "y"])
+        t.start()
+        t.set_status(Status.CHANGE_PENDING, stage=Stage.IOMMU, boot_id="boot-a")
+        with patch("amd_debug.triage.get_boot_id", return_value="boot-b"), patch(
+            "amd_debug.triage.iommu_disabled", return_value=False
+        ):
+            t.guide_change()
+        t.set_status(Status.RUNNING, boot_id="boot-old")
+        with patch(
+            "amd_debug.triage.get_boot_id", return_value="boot-new"
+        ), patch.object(t, "build_report"):
+            t.handle_interrupted_test()
+        self.assertEqual(
+            t.db.triage_get(t.session["id"])["outcome"],
+            "inconclusive_unverified_iommu",
+        )
+
+    def test_iommu_verified_outcome(self, *_):
+        """Verified IOMMU disabled concludes with fixed_by_iommu"""
+        t = make_triage(["y"])
+        t.start()
+        t.set_status(Status.CHANGE_PENDING, stage=Stage.IOMMU, boot_id="boot-a")
+        with patch("amd_debug.triage.get_boot_id", return_value="boot-b"), patch(
+            "amd_debug.triage.iommu_disabled", return_value=True
+        ):
+            self.assertTrue(t.guide_change())
+        with patch("amd_debug.triage.SleepValidator") as mock_val, patch.object(
+            t, "build_report"
+        ):
+            mock_val.return_value.run.return_value = True
+            self.assertTrue(t.run_test())
+        self.assertEqual(t.db.triage_get(t.session["id"])["outcome"], "fixed_by_iommu")
 
 
 if __name__ == "__main__":

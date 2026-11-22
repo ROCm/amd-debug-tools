@@ -4,13 +4,14 @@
 """
 This module contains unit tests for the datbase functions in the amd-debug-tools package.
 """
+
 import os
 import unittest
 
 from datetime import datetime
 from unittest.mock import patch, MagicMock
 
-from amd_debug.database import SCHEMA_VERSION, SleepDatabase
+from amd_debug.database import SCHEMA_VERSION, SleepDatabase, default_database_path
 
 
 class TestTriageMigration(unittest.TestCase):
@@ -19,15 +20,80 @@ class TestTriageMigration(unittest.TestCase):
     def test_migrate_to_triage(self):
         """Test the triage tables are created from schema 4"""
         import sqlite3  # pylint: disable=import-outside-toplevel
-        from amd_debug.database import migrate  # pylint: disable=import-outside-toplevel
+        from amd_debug.database import (
+            migrate,
+        )  # pylint: disable=import-outside-toplevel
 
         cur = sqlite3.connect(":memory:").cursor()
         cur.execute("PRAGMA user_version = 4")
         migrate(cur, SCHEMA_VERSION)
         cur.execute("SELECT name FROM sqlite_master WHERE name LIKE 'triage%'")
-        self.assertEqual(sorted(r[0] for r in cur.fetchall()), ["triage", "triage_event"])
+        self.assertEqual(
+            sorted(r[0] for r in cur.fetchall()), ["triage", "triage_event"]
+        )
         cur.execute("PRAGMA user_version")
         self.assertEqual(cur.fetchone()[0], SCHEMA_VERSION)
+
+    def test_migrate_verified_backfill(self):
+        """Test the verified column is backfilled from the prose messages"""
+        import sqlite3  # pylint: disable=import-outside-toplevel
+        from amd_debug.database import (
+            migrate,
+        )  # pylint: disable=import-outside-toplevel
+
+        cur = sqlite3.connect(":memory:").cursor()
+        cur.execute("PRAGMA user_version = 5")
+        cur.execute(
+            "CREATE TABLE triage_event (session INTEGER, id INTEGER, ts INTEGER, "
+            "kind TEXT, message TEXT, answer TEXT, PRIMARY KEY(session, id))"
+        )
+        cur.execute(
+            "INSERT INTO triage_event (session, id, ts, kind, message, answer) "
+            "VALUES (1, 0, 0, 'action', 'Change applied: IOMMU disabled', NULL)"
+        )
+        cur.execute(
+            "INSERT INTO triage_event (session, id, ts, kind, message, answer) "
+            "VALUES (1, 1, 0, 'action', "
+            "'Change applied (unverified): IOMMU disabled', NULL)"
+        )
+        # A non-action event with a similar message must not be backfilled
+        cur.execute(
+            "INSERT INTO triage_event (session, id, ts, kind, message, answer) "
+            "VALUES (1, 2, 0, 'info', 'Change applied: IOMMU disabled', NULL)"
+        )
+        migrate(cur, SCHEMA_VERSION)
+        cur.execute("SELECT verified FROM triage_event ORDER BY id")
+        self.assertEqual([r[0] for r in cur.fetchall()], [1, 0, None])
+
+    def test_migrate_schema_0_idempotent_priority(self):
+        """Test migrating from schema 0 when debug already has priority column"""
+        import sqlite3  # pylint: disable=import-outside-toplevel
+        from amd_debug.database import (
+            migrate,
+        )  # pylint: disable=import-outside-toplevel
+
+        cur = sqlite3.connect(":memory:").cursor()
+        cur.execute(
+            "CREATE TABLE debug (t0 INTEGER, id INTEGER, message TEXT, priority INTEGER)"
+        )
+        cur.execute("PRAGMA user_version = 0")
+        migrate(cur, SCHEMA_VERSION)
+        cur.execute("PRAGMA user_version")
+        self.assertEqual(cur.fetchone()[0], SCHEMA_VERSION)
+
+    def test_new_database_file_init(self):
+        """Test initializing a new SleepDatabase on a filesystem path"""
+        import tempfile  # pylint: disable=import-outside-toplevel
+        from amd_debug.database import (
+            SleepDatabase,
+        )  # pylint: disable=import-outside-toplevel
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = os.path.join(tmpdir, "test.db")
+            db = SleepDatabase(db_path)
+            cur = db.db.cursor()
+            cur.execute("PRAGMA user_version")
+            self.assertEqual(cur.fetchone()[0], SCHEMA_VERSION)
 
 
 class TestSleepDatabase(unittest.TestCase):
@@ -144,9 +210,7 @@ class TestSleepDatabase(unittest.TestCase):
 
         db = SleepDatabase(dbf=dbf)
         cur = db.db.cursor()
-        columns = [
-            row[1] for row in cur.execute("PRAGMA table_info(debug)").fetchall()
-        ]
+        columns = [row[1] for row in cur.execute("PRAGMA table_info(debug)").fetchall()]
         self.assertIn("priority", columns)
         cur.execute("PRAGMA user_version")
         self.assertEqual(cur.fetchone()[0], SCHEMA_VERSION)
@@ -463,8 +527,12 @@ class TestSleepDatabase(unittest.TestCase):
         )
         results = cur.fetchall()
         self.assertEqual(len(results), 3)
-        self.assertEqual(results[0], ("CPU_VDDCR_PH1", 1000000.0, 1050000.0, 149011.611))
-        self.assertEqual(results[1], ("CPU_VDDCR_PH2", 2000000.0, 2100000.0, 149011.611))
+        self.assertEqual(
+            results[0], ("CPU_VDDCR_PH1", 1000000.0, 1050000.0, 149011.611)
+        )
+        self.assertEqual(
+            results[1], ("CPU_VDDCR_PH2", 2000000.0, 2100000.0, 149011.611)
+        )
         self.assertEqual(results[2], ("VDDIO", 3000000.0, 3150000.0, 23751.3))
 
     def test_report_power_rails(self):
@@ -494,22 +562,71 @@ class TestSleepDatabase(unittest.TestCase):
         result = self.db.report_power_rails(timestamp)
         self.assertEqual(result, [])
 
-    def test_default_db_path_uses_var_lib_restrictive(self):
-        """Test the default database path is created securely in /var/lib"""
-        with patch("amd_debug.database.os.makedirs") as makedirs, patch(
-            "amd_debug.database.os.path.exists", return_value=False
-        ), patch("amd_debug.database.sqlite3.connect", return_value=MagicMock()):
-            SleepDatabase()
+    def test_default_database_path_xdg(self):
+        """Test default database path uses XDG_DATA_HOME if set"""
+        with patch.dict(os.environ, {"XDG_DATA_HOME": "/custom/path"}, clear=True):
+            self.assertEqual(default_database_path(), "/custom/path/data.db")
 
-            # Directory is created in /var/lib with a restrictive mode
-            makedirs.assert_called_once_with(
-                "/var/lib/amd-s2idle", mode=0o700, exist_ok=True
-            )
+    def test_default_database_path_sudo_user(self):
+        """Test default database path uses home directory of SUDO_USER"""
+        with patch.dict(os.environ, {"SUDO_USER": "testuser"}, clear=True):
+            with patch("os.path.expanduser", return_value="/home/testuser"):
+                self.assertEqual(
+                    default_database_path(),
+                    "/home/testuser/.local/share/amd-debug-tools/data.db",
+                )
 
-            # The insecure /var/local fallback is never referenced
-            for call in makedirs.call_args_list:
-                for arg in call.args:
-                    self.assertNotIn("/var/local", str(arg))
+    def test_default_database_path_unprivileged_user(self):
+        """Test default database path uses home directory of unprivileged user"""
+        with patch.dict(os.environ, {}, clear=True):
+            with patch("os.path.expanduser", return_value="/home/normaluser"), patch(
+                "amd_debug.database.is_root", return_value=False
+            ):
+                self.assertEqual(
+                    default_database_path(),
+                    "/home/normaluser/.local/share/amd-debug-tools/data.db",
+                )
+
+    @patch("amd_debug.database.is_root", return_value=True)
+    def test_default_database_path_root_systemd(self, _mock_root):
+        """Test default database path uses /var/lib/amd-s2idle for root/systemd captures"""
+        with patch.dict(os.environ, {}, clear=True):
+            self.assertEqual(default_database_path(), "/var/lib/amd-s2idle/data.db")
+
+    def test_default_database_path_custom_env(self):
+        """Test default database path uses AMD_S2IDLE_DB if set"""
+        with patch.dict(os.environ, {"AMD_S2IDLE_DB": "/custom/db.sqlite"}, clear=True):
+            self.assertEqual(default_database_path(), "/custom/db.sqlite")
+
+    @patch("amd_debug.database.os.path.islink", return_value=True)
+    def test_symlink_path_rejected(self, _mock_islink):
+        """Test database rejects symlink in database file or directory"""
+        with self.assertRaises(ValueError):
+            SleepDatabase(dbf="/tmp/symlink_db.sqlite")
+
+    @patch("amd_debug.database.os.lchown")
+    @patch("amd_debug.database.os.makedirs")
+    @patch("amd_debug.database.os.path.exists", return_value=False)
+    @patch("amd_debug.database.sqlite3.connect", return_value=MagicMock())
+    def test_default_db_creates_in_user_data_dir(
+        self, _mock_connect, _mock_exists, mock_makedirs, mock_lchown
+    ):
+        """Test default database creates directory in home/user data dir and chowns if under sudo"""
+        with patch.dict(
+            os.environ,
+            {"SUDO_USER": "testuser", "SUDO_UID": "1000", "SUDO_GID": "1000"},
+            clear=True,
+        ):
+            with patch("os.path.expanduser", return_value="/home/testuser"):
+                SleepDatabase()
+                mock_makedirs.assert_called_once_with(
+                    "/home/testuser/.local/share/amd-debug-tools",
+                    mode=0o755,
+                    exist_ok=True,
+                )
+                mock_lchown.assert_any_call(
+                    "/home/testuser/.local/share/amd-debug-tools", 1000, 1000
+                )
 
     def test_schema_migration_v1_to_v3(self):
         """Test database migration to the current schema"""
@@ -526,9 +643,7 @@ class TestSleepDatabase(unittest.TestCase):
         self.assertEqual(result[0], "power_rails")
 
         # Verify s0ix table exists
-        cur.execute(
-            "SELECT name FROM sqlite_master WHERE type='table' AND name='s0ix'"
-        )
+        cur.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='s0ix'")
         result = cur.fetchone()
         self.assertIsNotNone(result)
         self.assertEqual(result[0], "s0ix")

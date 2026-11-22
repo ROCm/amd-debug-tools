@@ -40,6 +40,14 @@ def confirm_overwrite_report(fname) -> bool:
     """If fname exists, prompt to overwrite. Returns True if writing can proceed."""
     if not fname or not os.path.lexists(fname):
         return True
+    # When launched from TUI, the TUI already confirmed - just delete silently
+    if os.environ.get("AMD_S2IDLE_TUI"):
+        try:
+            os.unlink(fname)
+            return True
+        except OSError as e:
+            print(f"Failed to remove existing report file {fname}: {e}")
+            return False
     response = (
         input(f"Report file already exists: {fname}. Overwrite? (y/n): ")
         .strip()

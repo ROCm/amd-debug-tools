@@ -35,6 +35,7 @@ class Headers:  # pylint: disable=too-few-public-methods
     MissingTabulate = "Data library `tabulate` is missing"
     MissingJinja2 = "Template library `jinja2` is missing"
     MissingSeaborn = "Data visualization library `seaborn` is missing"
+    MissingTextual = "Terminal UI library `textual` is missing"
     UnknownDistro = "No distro installation support available, install manually"
 
 
@@ -151,6 +152,18 @@ class SeabornPackage(DistroPackage):
             rpm="python3-seaborn",
             arch="python-seaborn",
             message=Headers.MissingSeaborn,
+        )
+
+
+class TextualPackage(DistroPackage):
+    """Class for handling the textual package"""
+
+    def __init__(self):
+        super().__init__(
+            deb="python3-textual",
+            rpm="python3-textual",
+            arch="python-textual",
+            message=Headers.MissingTextual,
         )
 
 
@@ -352,6 +365,13 @@ class Installer(AmdTool):
                 package = SeabornPackage()
                 if not package.install():
                     return False
+        if "textual" in self.requirements:
+            try:
+                import textual as _  # pylint: disable=import-outside-toplevel
+            except ModuleNotFoundError:
+                package = TextualPackage()
+                if not package.install():
+                    return False
 
         return True
 
@@ -467,6 +487,7 @@ def install_dep_superset() -> None | int:
         "seaborn",
         "tabulate",
         "edid-decode",
+        "textual",
     )
     ret = tool.install_dependencies()
     if ret:

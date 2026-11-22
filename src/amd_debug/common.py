@@ -134,6 +134,20 @@ def _configure_log(prefix) -> str:
         return
 
     if prefix:
+        if "PKEXEC_UID" in os.environ:
+            if "SUDO_UID" not in os.environ:
+                os.environ["SUDO_UID"] = os.environ["PKEXEC_UID"]
+            try:
+                import pwd
+
+                pw = pwd.getpwuid(int(os.environ["PKEXEC_UID"]))
+                if "SUDO_USER" not in os.environ:
+                    os.environ["SUDO_USER"] = pw.pw_name
+                if "SUDO_GID" not in os.environ:
+                    os.environ["SUDO_GID"] = str(pw.pw_gid)
+            except (KeyError, ValueError, ImportError):
+                pass
+
         user = os.environ.get("SUDO_USER")
         home = os.path.expanduser(f"~{user if user else ''}")
         path = os.environ.get("XDG_DATA_HOME") or os.path.join(
@@ -424,37 +438,64 @@ def read_msr(msr, cpu):
     return val
 
 
-def relaunch_sudo() -> None:
-    """Relaunch the script with sudo if not already running as root"""
+def relaunch_sudo(pkexec: bool = False, extra_args: list = None) -> None:
+    """Relaunch the script with sudo or pkexec if not already running as root
+
+    extra_args are appended to the re-exec'd command line (e.g. ["--accepted"])
+    so the elevated process can pick up state without mutating sys.argv.
+    """
     if not is_root():
-        logging.debug("Relaunching with sudo")
+        binary = "pkexec" if pkexec else "sudo"
+        logging.debug(f"Relaunching with {binary}")
+        argv = sys.argv + list(extra_args or [])
         env_vars = []
-        for var in [
+        vars_to_check = [
             "DISPLAY",
-            "WAYLAND_DISPLAY",
             "XAUTHORITY",
-            "XDG_RUNTIME_DIR",
             "DBUS_SESSION_BUS_ADDRESS",
             "XDG_SESSION_TYPE",
             "XDG_DATA_DIRS",
+            "XDG_DATA_HOME",
+            "AMD_S2IDLE_DB",
             "KDE_SESSION_VERSION",
             "SSH_CLIENT",
             "SSH_TTY",
-        ]:
+        ]
+        if not pkexec:
+            vars_to_check.insert(1, "WAYLAND_DISPLAY")
+            vars_to_check.insert(3, "XDG_RUNTIME_DIR")
+        for var in vars_to_check:
             value = os.environ.get(var)
             if value:
                 env_vars.append(f"{var}={value}")
 
-        if env_vars:
-            sudo_cmd = (
-                ["sudo"]
-                + [f"--preserve-env={var.split('=')[0]}" for var in env_vars]
-                + sys.argv
-            )
-        else:
-            sudo_cmd = ["sudo"] + sys.argv
+        if pkexec:
+            import pwd
 
-        os.execvp("sudo", sudo_cmd)
+            uid = os.getuid()
+            gid = os.getgid()
+            try:
+                user = pwd.getpwuid(uid).pw_name
+            except (KeyError, ValueError, ImportError):
+                user = os.environ.get("USER", "")
+            if user:
+                env_vars.append(f"SUDO_USER={user}")
+            env_vars.append(f"SUDO_UID={uid}")
+            env_vars.append(f"SUDO_GID={gid}")
+
+            cmd = ["pkexec", "env"] + env_vars + argv
+            os.execvp("pkexec", cmd)
+        else:
+            if env_vars:
+                sudo_cmd = (
+                    ["sudo"]
+                    + [f"--preserve-env={var.split('=')[0]}" for var in env_vars]
+                    + argv
+                )
+            else:
+                sudo_cmd = ["sudo"] + argv
+
+            os.execvp("sudo", sudo_cmd)
 
 
 def running_ssh():

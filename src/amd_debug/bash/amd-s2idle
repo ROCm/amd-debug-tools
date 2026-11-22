@@ -4,10 +4,16 @@ _cmd_list=(
 	'test'
 	'triage'
 	'report'
+	'tui'
 	'version'
 )
 
 _general_opts=(
+	'--pkexec'
+)
+
+_tui_opts=(
+	'--tool-debug'
 )
 
 _report_opts=(
@@ -58,6 +64,11 @@ _show_report_opts()
 	COMPREPLY+=( $(compgen -W '${_report_opts[@]}' -- "$cur") )
 }
 
+_show_tui_opts()
+{
+	COMPREPLY+=( $(compgen -W '${_tui_opts[@]}' -- "$cur") )
+}
+
 _show_format_completion()
 {
 	COMPREPLY+=( $(compgen -W '${_format_opts[@]}' -- "$cur") )
@@ -89,6 +100,9 @@ _amd_s2idle()
 		;;
 	report)
 		_show_report_opts
+		;;
+	tui)
+		_show_tui_opts
 		;;
 
 	*)

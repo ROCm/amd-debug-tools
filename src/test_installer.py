@@ -16,6 +16,7 @@ from amd_debug.installer import (
     DistroPackage,
     FwupdPackage,
     EdidDecodePackage,
+    TextualPackage,
     install_dep_superset,
     parse_args,
     show_install_message,
@@ -516,6 +517,14 @@ class TestInstaller(unittest.TestCase):
         mock_installer_cls.return_value = mock_tool
         self.assertIsNone(install_dep_superset())
         mock_tool.set_requirements.assert_called_once()
+        self.assertIn("textual", mock_tool.set_requirements.call_args[0])
+
+    def test_textual_package(self):
+        """Test TextualPackage package attributes"""
+        pkg = TextualPackage()
+        self.assertEqual(pkg.deb, "python3-textual")
+        self.assertEqual(pkg.rpm, "python3-textual")
+        self.assertEqual(pkg.arch, "python-textual")
 
     @patch("amd_debug.installer.show_log_info")
     @patch("amd_debug.installer.Installer")

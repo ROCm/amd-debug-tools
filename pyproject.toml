@@ -22,7 +22,7 @@ name = "amd-debug-tools"
 authors = [{ name = "Mario Limonciello", email = "superm1@kernel.org" }]
 description = "debug tools for AMD and Intel s2idle systems"
 readme = "README.md"
-requires-python = ">=3.7"
+requires-python = ">=3.8"
 classifiers = [
     "Programming Language :: Python :: 3",
     "Operating System :: POSIX :: Linux",
@@ -40,6 +40,7 @@ dependencies = [
     "matplotlib",
     "seaborn",
     "plotly",
+    "textual",
 ]
 dynamic = ["version"]
 license = "MIT"

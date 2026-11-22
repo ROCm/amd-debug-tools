@@ -16,7 +16,30 @@ are meaningful for the platform are run.  See
 [platform support](platform-support.md) for the details of what is checked
 on each platform.
 
-4 high level commands are supported.
+Without any command, `amd-s2idle` starts the interactive Textual terminal
+user interface (TUI) by default.
+
+The following commands are supported.
+
+## `amd-s2idle tui`
+This will launch an interactive Textual terminal user interface (TUI) wrapping
+the `test`, `report`, `triage`, `install`, and `uninstall` commands.
+This is also the default mode when `amd-s2idle` is invoked without any command.
+
+The following optional arguments are supported for this command:
+
+        --tool-debug          Enable debug logging
+
+## `amd-s2idle triage`
+This will interactively triage s2idle hangs by guiding the user through
+an interview and diagnostic steps across reboots.
+
+The following optional arguments are supported for this command:
+
+        --restart             Abandon any triage in progress and start over
+        --format FORMAT       Format of the report to produce (html, txt or md)
+        --report-file         File to write the report to
+        --tool-debug          Enable debug logging
 
 ## `amd-s2idle install`
 This will install the systemd hook so that data will be captured before and

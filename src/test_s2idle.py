@@ -6,6 +6,7 @@ This module contains unit tests for the s2idle tool in the amd-debug-tools packa
 """
 
 import argparse
+import os
 import sys
 import unittest
 import logging
@@ -42,17 +43,15 @@ class TestParseArgs(unittest.TestCase):
         sys.argv = self.default_sys_argv
 
     def test_no_arguments(self):
-        """Test parse_args with no arguments defaults to triage"""
+        """Test parse_args with no arguments defaults to tui"""
         sys.argv = ["s2idle.py"]
         args = parse_args()
-        self.assertEqual(args.action, "triage")
-        self.assertTrue(args.implicit_triage)
-        self.assertFalse(args.restart)
+        self.assertEqual(args.action, "tui")
 
     def test_explicit_triage_not_implicit(self):
-        """Test asking for triage isn't treated as the default mode"""
+        """Test asking for triage explicitly sets action to triage"""
         sys.argv = ["s2idle.py", "triage"]
-        self.assertFalse(parse_args().implicit_triage)
+        self.assertEqual(parse_args().action, "triage")
 
     def test_test_command_with_arguments(self):
         """Test parse_args with test command and arguments"""
@@ -129,6 +128,37 @@ class TestParseArgs(unittest.TestCase):
         sys.argv = ["s2idle.py", "--version"]
         args = parse_args()
         self.assertTrue(args.version)
+
+    def test_tui_command(self):
+        """Test parse_args with tui command"""
+        sys.argv = ["s2idle.py", "tui", "--tool-debug"]
+        args = parse_args()
+        self.assertEqual(args.action, "tui")
+        self.assertTrue(args.tool_debug)
+        self.assertFalse(args.pkexec)
+
+    def test_top_level_pkexec(self):
+        """Test parse_args with top-level --pkexec flag"""
+        sys.argv = ["s2idle.py", "--pkexec", "tui"]
+        args = parse_args()
+        self.assertEqual(args.action, "tui")
+        self.assertTrue(args.pkexec)
+
+    def test_top_level_pkexec_defaults_to_tui(self):
+        """Test parse_args with top-level --pkexec flag without command defaults to tui"""
+        sys.argv = ["s2idle.py", "--pkexec"]
+        args = parse_args()
+        self.assertEqual(args.action, "tui")
+        self.assertTrue(args.pkexec)
+
+    def test_help_text_reflects_tui_default(self):
+        """Test parser help text explicitly reflects tui as default"""
+        from amd_debug.s2idle import build_parser
+
+        help_text = build_parser().format_help()
+        self.assertIn("Possible commands (default: tui)", help_text)
+        self.assertIn("Launch interactive Textual TUI (default)", help_text)
+        self.assertIn("Without any command the TUI is started", help_text)
 
 
 class TestMainFunction(unittest.TestCase):
@@ -218,18 +248,38 @@ class TestMainFunction(unittest.TestCase):
             )
             self.assertIsNone(result)
 
+    @patch("amd_debug.s2idle.is_root", return_value=False)
     @patch("amd_debug.s2idle.relaunch_sudo")
     @patch("amd_debug.s2idle.run_triage")
-    def test_main_triage(self, mock_triage, mock_relaunch_sudo):
-        """Test main function with triage action"""
+    def test_main_triage(self, mock_triage, mock_relaunch_sudo, _mock_root):
+        """Test main function with triage action passes --accepted to the relaunch"""
         sys.argv = ["s2idle.py", "triage"]
-        args = argparse.Namespace(action="triage")
+        args = argparse.Namespace(action="triage", accepted=False, pkexec=False)
         with patch("amd_debug.s2idle.parse_args", return_value=args), patch(
             "amd_debug.s2idle.confirm_triage", return_value=True
         ):
             mock_triage.return_value = True
             self.assertIsNone(main())
-            mock_relaunch_sudo.assert_called_once()
+            mock_relaunch_sudo.assert_called_once_with(
+                pkexec=False, extra_args=["--accepted"]
+            )
+            mock_triage.assert_called_once_with(args)
+
+    @patch("amd_debug.s2idle.is_root", return_value=False)
+    @patch("amd_debug.s2idle.relaunch_sudo")
+    @patch("amd_debug.s2idle.run_triage")
+    def test_main_triage_already_accepted(
+        self, mock_triage, mock_relaunch_sudo, _mock_root
+    ):
+        """A pre-accepted triage doesn't pass --accepted again"""
+        sys.argv = ["s2idle.py", "triage", "--accepted"]
+        args = argparse.Namespace(action="triage", accepted=True, pkexec=False)
+        with patch("amd_debug.s2idle.parse_args", return_value=args), patch(
+            "amd_debug.s2idle.confirm_triage", return_value=True
+        ):
+            mock_triage.return_value = True
+            self.assertIsNone(main())
+            mock_relaunch_sudo.assert_called_once_with(pkexec=False, extra_args=[])
             mock_triage.assert_called_once_with(args)
 
     @patch("amd_debug.s2idle.relaunch_sudo")
@@ -243,6 +293,28 @@ class TestMainFunction(unittest.TestCase):
             self.assertEqual(main(), 1)
         mock_relaunch_sudo.assert_not_called()
         mock_triage.assert_not_called()
+
+    @patch("amd_debug.s2idle.relaunch_sudo")
+    @patch("amd_debug.s2idle.run_tui", return_value=True)
+    def test_main_tui(self, mock_run_tui, mock_relaunch_sudo):
+        """Test main function with tui action does not relaunch with sudo up front"""
+        args = argparse.Namespace(action="tui", pkexec=False, tool_debug=False)
+        with patch("amd_debug.s2idle.parse_args", return_value=args):
+            self.assertIsNone(main())
+            mock_relaunch_sudo.assert_not_called()
+            mock_run_tui.assert_called_once_with(args)
+
+    @patch("amd_debug.tui.S2idleApp")
+    def test_run_tui_function(self, mock_app_cls):
+        """Test run_tui helper function instantiates and runs S2idleApp"""
+        from amd_debug.s2idle import run_tui
+
+        mock_instance = mock_app_cls.return_value
+        args = argparse.Namespace(tool_debug=True)
+        ret = run_tui(args)
+        self.assertTrue(ret)
+        mock_app_cls.assert_called_once_with(tool_debug=True)
+        mock_instance.run.assert_called_once()
 
     @patch("amd_debug.s2idle.version")
     def test_main_version(self, mock_version):
@@ -639,7 +711,11 @@ class TestDisplayReportFile(unittest.TestCase):
     @patch("amd_debug.s2idle.is_root", return_value=True)
     @patch(
         "os.environ.get",
-        side_effect=lambda key: "testuser" if key == "SUDO_USER" else "foo",
+        side_effect=lambda key: (
+            None
+            if key == "AMD_S2IDLE_TUI"
+            else ("testuser" if key == "SUDO_USER" else "foo")
+        ),
     )
     @patch("subprocess.call")
     def test_display_report_file_html_root_with_user(
@@ -650,12 +726,12 @@ class TestDisplayReportFile(unittest.TestCase):
         mock_is_root.assert_called_once()
         mock_env_get.assert_any_call("SUDO_USER")
         call_args = mock_subprocess_call.call_args[0][0]
-        assert call_args[0] == "sudo"
-        assert call_args[1] == "-u"
-        assert call_args[2] == "testuser"
-        assert call_args[3] == "env"
-        assert "xdg-open" in call_args
-        assert "report.html" in call_args
+        self.assertEqual(call_args[0], "sudo")
+        self.assertEqual(call_args[1], "-u")
+        self.assertEqual(call_args[2], "testuser")
+        self.assertEqual(call_args[3], "env")
+        self.assertIn("xdg-open", call_args)
+        self.assertIn("report.html", call_args)
 
     @patch("amd_debug.s2idle.is_root", return_value=True)
     @patch("os.environ.get", side_effect=lambda key: None)
@@ -668,6 +744,13 @@ class TestDisplayReportFile(unittest.TestCase):
         mock_is_root.assert_called_once()
         mock_env_get.assert_any_call("SUDO_USER")
         mock_print.assert_not_called()
+
+    @patch.dict(os.environ, {"AMD_S2IDLE_TUI": "1"})
+    @patch("subprocess.call")
+    def test_display_report_file_tui_suppressed(self, mock_call):
+        """Test display_report_file is suppressed when launched from TUI"""
+        display_report_file("report.html", "html")
+        mock_call.assert_not_called()
 
 
 class TestReportFunction(unittest.TestCase):
@@ -1000,14 +1083,14 @@ class TestRunTriage(unittest.TestCase):
         self.assertTrue(err.write.called)
 
     @patch("amd_debug.s2idle.Triage")
-    def test_explicit_triage_declined_no_help(self, mock_triage):
-        """Declining an explicit triage doesn't show the help"""
+    def test_explicit_triage_declined_shows_help(self, mock_triage):
+        """Declining an explicit triage shows the help"""
         mock_triage.return_value.run.return_value = False
         mock_triage.return_value.declined = True
         mock_triage.return_value.report_path = None
         with patch("sys.stderr") as err:
             run_triage(self._args(False))
-        err.write.assert_not_called()
+        self.assertTrue(err.write.called)
 
     @patch("amd_debug.s2idle.Triage")
     def test_implicit_triage_accepted_no_help(self, mock_triage):
@@ -1065,17 +1148,18 @@ class TestConfirmTriage(unittest.TestCase):
     @patch("amd_debug.s2idle.confirm_start", return_value=True)
     @patch("amd_debug.s2idle.is_root", return_value=False)
     def test_accept_explicit(self, _root, _confirm):
-        """The answer is passed to the sudo relaunch"""
+        """Accepting doesn't mutate sys.argv; the caller passes --accepted to the relaunch"""
         sys.argv = ["s2idle", "triage", "--restart"]
         self.assertTrue(confirm_triage(self._args()))
-        self.assertEqual(sys.argv, ["s2idle", "triage", "--restart", "--accepted"])
+        self.assertEqual(sys.argv, ["s2idle", "triage", "--restart"])
 
     @patch("amd_debug.s2idle.confirm_start", return_value=True)
     @patch("amd_debug.s2idle.is_root", return_value=False)
     def test_accept_implicit(self, _root, _confirm):
         """The default mode relaunches as an explicit triage"""
+        sys.argv = ["s2idle", "triage"]
         self.assertTrue(confirm_triage(self._args(implicit=True)))
-        self.assertEqual(sys.argv, ["s2idle", "triage", "--accepted"])
+        self.assertEqual(sys.argv, ["s2idle", "triage"])
 
     @patch("amd_debug.s2idle.confirm_start", return_value=False)
     @patch("amd_debug.s2idle.is_root", return_value=False)
@@ -1088,8 +1172,8 @@ class TestConfirmTriage(unittest.TestCase):
 
     @patch("amd_debug.s2idle.confirm_start", return_value=False)
     @patch("amd_debug.s2idle.is_root", return_value=False)
-    def test_decline_explicit_no_help(self, _root, _confirm):
-        """Declining an explicit triage doesn't"""
+    def test_decline_explicit_shows_help(self, _root, _confirm):
+        """Declining an explicit triage shows help"""
         with patch("sys.stderr") as err:
             self.assertFalse(confirm_triage(self._args()))
-        err.write.assert_not_called()
+        self.assertTrue(err.write.called)

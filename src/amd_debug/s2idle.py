@@ -55,6 +55,8 @@ class Headers:
 
 def display_report_file(fname, fmt) -> None:
     """Display report file"""
+    if os.environ.get("AMD_S2IDLE_TUI") in ("1", "true", "True"):
+        return
     if fmt != "html":
         return
     if not is_root():
@@ -78,7 +80,7 @@ def display_report_file(fname, fmt) -> None:
                 env_vars.append(f"{var}={value}")
 
         if env_vars:
-            cmd = ["sudo", "-u", user] + [f"env"] + env_vars + ["xdg-open", fname]
+            cmd = ["sudo", "-u", user] + ["env"] + env_vars + ["xdg-open", fname]
             subprocess.call(cmd)
         else:
             print(
@@ -92,8 +94,10 @@ def get_report_file(report_file, extension) -> str:
     if extension == "stdout":
         return ""
     if not report_file:
-        return f"amd-s2idle-report-{date.today()}.{extension}"
-    return report_file
+        report_file = f"amd-s2idle-report-{date.today()}.{extension}"
+    # Resolve to an absolute path so the report is written to the expected
+    # location even if the tool re-execs (sudo/pkexec) or is launched from the TUI
+    return os.path.abspath(report_file)
 
 
 def get_report_format() -> str:
@@ -284,18 +288,15 @@ def run_test_cycle(
 def confirm_triage(args) -> bool:
     """Ask the triage question before the (password prompting) sudo relaunch
 
-    The answer is passed on to the relaunched tool so it isn't asked twice.
+    Returns True if triage should proceed, False if the user declined.
+    The caller is responsible for passing --accepted to the relaunched tool
+    (via relaunch_sudo's extra_args) so the question isn't asked twice.
     """
     if is_root() or args.accepted:
         return True
-    if not confirm_start(implicit=args.implicit_triage):
-        if args.implicit_triage:
-            # they didn't ask for triage, so show what else the tool can do
-            build_parser().print_help(sys.stderr)
+    if not confirm_start(implicit=False):
+        build_parser().print_help(sys.stderr)
         return False
-    if args.implicit_triage:
-        sys.argv.append("triage")
-    sys.argv.append("--accepted")
     return True
 
 
@@ -306,15 +307,14 @@ def run_triage(args) -> bool:
         fname=args.report_file,
         debug=args.tool_debug,
         accepted=args.accepted,
-        implicit=args.implicit_triage,
+        implicit=False,
     )
     if args.restart:
         app.db.triage_abandon_all()
     ret = app.run()
     if app.report_path:
         display_report_file(app.report_path, app.fmt)
-    if app.declined and args.implicit_triage:
-        # they didn't ask for triage, so show what else the tool can do
+    if app.declined:
         build_parser().print_help(sys.stderr)
     return ret
 
@@ -349,14 +349,18 @@ def build_parser() -> argparse.ArgumentParser:
     """Build the command line parser"""
     parser = argparse.ArgumentParser(
         description="Swiss army knife for analyzing Linux s2idle problems",
-        epilog="Without any command the 'triage' interview is started, which "
-        "helps narrow down s2idle hangs.\n"
+        epilog="Without any command the TUI is started, which provides a "
+        "graphical front-end for triage, tests, and reports.\n"
+        "The 'triage' command runs a guided interview that helps narrow down "
+        "s2idle hangs.\n"
         "The tool can run an immediate test with the 'test' command "
         "or can be used to hook into systemd for building reports later.\n"
         "All optional arguments will be prompted if needed.\n"
         "To use non-interactively, please populate all optional arguments.",
     )
-    subparsers = parser.add_subparsers(help="Possible commands", dest="action")
+    subparsers = parser.add_subparsers(
+        help="Possible commands (default: tui)", dest="action"
+    )
 
     # 'test' command
     test_cmd = subparsers.add_parser("test", help="Run amd-s2idle test and report")
@@ -453,6 +457,16 @@ def build_parser() -> argparse.ArgumentParser:
         help="Include debug messages in report (WARNING: can significantly increase report size)",
     )
 
+    # 'tui' command
+    tui_cmd = subparsers.add_parser(
+        "tui", help="Launch interactive Textual TUI (default)"
+    )
+    tui_cmd.add_argument(
+        "--tool-debug",
+        action="store_true",
+        help="Enable tool debug logging",
+    )
+
     # if running in a venv, install/uninstall hook options
     if sys.prefix != sys.base_prefix:
         install_cmd = subparsers.add_parser(
@@ -473,24 +487,40 @@ def build_parser() -> argparse.ArgumentParser:
         )
 
     parser.add_argument(
+        "--pkexec",
+        action="store_true",
+        help="Use pkexec instead of sudo to elevate privileges",
+    )
+    parser.add_argument(
         "--version", action="store_true", help="Show version information"
     )
 
     return parser
 
 
+def run_tui(args) -> bool:
+    """Launch the Textual TUI"""
+    from amd_debug.tui import S2idleApp  # pylint: disable=import-outside-toplevel
+
+    app = S2idleApp(
+        tool_debug=getattr(args, "tool_debug", False),
+    )
+    app.run()
+    return True
+
+
 def parse_args():
     """Parse command line arguments
 
-    Without any arguments the tool starts the triage interview.
+    Without any arguments the tool starts the TUI.
     """
     parser = build_parser()
     if len(sys.argv) == 1:
-        args = parser.parse_args(["triage"])
-        args.implicit_triage = True
+        args = parser.parse_args(["tui"])
         return args
     args = parser.parse_args()
-    args.implicit_triage = False
+    if args.action is None and not args.version:
+        args.action = "tui"
     return args
 
 
@@ -498,11 +528,12 @@ def main() -> None | int:
     """Main function"""
     args = parse_args()
     ret = False
+    pkexec = getattr(args, "pkexec", False)
     if args.action == "install":
-        relaunch_sudo()
+        relaunch_sudo(pkexec=pkexec)
         install(args.tool_debug)
     elif args.action == "uninstall":
-        relaunch_sudo()
+        relaunch_sudo(pkexec=pkexec)
         uninstall(args.tool_debug)
     elif args.action == "report":
         ret = report(
@@ -514,7 +545,7 @@ def main() -> None | int:
             args.report_debug,
         )
     elif args.action == "test":
-        relaunch_sudo()
+        relaunch_sudo(pkexec=pkexec)
         ret = run_test_cycle(
             args.duration,
             args.wait,
@@ -529,8 +560,13 @@ def main() -> None | int:
         )
     elif args.action == "triage":
         if confirm_triage(args):
-            relaunch_sudo()
+            # If the user just confirmed (not root, not pre-accepted), pass
+            # --accepted so the re-exec'd elevated process doesn't ask again
+            extra = [] if (is_root() or args.accepted) else ["--accepted"]
+            relaunch_sudo(pkexec=pkexec, extra_args=extra)
             ret = run_triage(args)
+    elif args.action == "tui":
+        ret = run_tui(args)
     elif args.version:
         print(version())
         return

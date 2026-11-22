@@ -16,9 +16,10 @@ and the s2idle analysis relies on the following interfaces:
     was told not to use the LPS0 device interface.
 """
 
+from __future__ import annotations
+
 import os
 import re
-from typing import Optional
 
 from amd_debug.common import read_file
 
@@ -297,7 +298,7 @@ def get_dmc_firmware_status() -> dict:
     return status
 
 
-def get_lps0_disabled() -> Optional[bool]:
+def get_lps0_disabled() -> bool | None:
     """Check if the kernel was told not to use the LPS0 device interface
 
     Returns None when the status can't be determined, e.g. when the

@@ -20,12 +20,11 @@ the S0ix state during s2idle:
     an error.
 """
 
+from amd_debug.failures import (
+    NvidiaS0ixDisabled,
+    NvidiaS0ixUnsupported,
+)
 from amd_debug.nvidia import (
-    get_module_params,
-    get_nvidia_gpus,
-    get_s0ix_param,
-    systemd_unit_enabled,
-    systemd_unit_installed,
     KERNEL_NOTIFIERS_PARAM,
     POWERD_UNIT,
     S0IX_DISABLED,
@@ -34,10 +33,11 @@ from amd_debug.nvidia import (
     S0IX_PARAM,
     S0IX_SUPPORTED,
     SUSPEND_UNITS,
-)
-from amd_debug.failures import (
-    NvidiaS0ixDisabled,
-    NvidiaS0ixUnsupported,
+    get_module_params,
+    get_nvidia_gpus,
+    get_s0ix_param,
+    systemd_unit_enabled,
+    systemd_unit_installed,
 )
 
 

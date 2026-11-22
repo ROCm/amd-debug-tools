@@ -1,6 +1,8 @@
 # SPDX-License-Identifier: MIT
 """Per-rail power capture and plotting tool"""
 
+from __future__ import annotations
+
 import argparse
 import logging
 import re
@@ -8,16 +10,17 @@ import sys
 import time
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional
 
 from amd_debug import power_db as db
 from amd_debug import power_service as service
 from amd_debug.common import print_color, systemd_in_use, version
 
+logger = logging.getLogger(__name__)
+
 DURATION_RE = re.compile(
     r"^\s*(\d+(?:\.\d+)?)\s*"
     r"(s|sec|secs|seconds|m|min|mins|minutes|h|hr|hrs|hours|d|day|days)?\s*$",
-    re.I,
+    re.IGNORECASE,
 )
 _UNIT_S = {
     "s": 1,
@@ -41,7 +44,7 @@ METRICS = ["power", "energy", "aggregate"]
 SYSTEMCTL_VERBS = ["start", "stop", "restart", "status"]
 
 
-def parse_when(value: Optional[str], *, now: float, default: float) -> float:
+def parse_when(value: str | None, *, now: float, default: float) -> float:
     """Parse a duration (``2h``, ``30m``; meaning ``now - duration``) or an
     ISO-8601 timestamp (naive timestamps are UTC) into epoch seconds."""
     if value is None:
@@ -183,7 +186,7 @@ def cmd_run(args) -> int:
         level=getattr(logging, args.log_level),
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
     )
-    logging.info("opening database at %s", path)
+    logger.info("opening database at %s", path)
     conn = db.connect(path)
     db.init_schema(conn)
     svc = service.CaptureService(conn, note=args.note)
@@ -328,7 +331,7 @@ def cmd_plot(args) -> int:
     return 0
 
 
-def main() -> Optional[int]:
+def main() -> int | None:
     """Main function"""
     args = parse_args()
     if args.version:

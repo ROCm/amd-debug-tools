@@ -10,9 +10,7 @@ to work out what happened.
 import re
 from datetime import timedelta
 
-from amd_debug.validator_headers import Headers
-from amd_debug.common import print_color, BIT
-from amd_debug.kernel import sscanf_bios_args
+from amd_debug.common import BIT, print_color
 from amd_debug.failures import (
     AcpiBiosError,
     IommuPageFault,
@@ -20,6 +18,8 @@ from amd_debug.failures import (
     LowHardwareSleepResidency,
     SpuriousWakeup,
 )
+from amd_debug.kernel import sscanf_bios_args
+from amd_debug.validator_headers import Headers
 
 
 class AnalysisHelpers:
@@ -100,15 +100,14 @@ class AnalysisHelpers:
                 f"Hardware sleep cycle count: {self.cycle_count}",
                 "💤",
             )
-        if self.wakeup_irqs:
-            if 1 in self.wakeup_irqs and self.needs_irq1_workaround():
-                if self.irq1_workaround:
-                    self.db.record_cycle_data(
-                        "Kernel workaround for IRQ1 issue utilized", "○"
-                    )
-                else:
-                    self.db.record_cycle_data("IRQ1 found during wakeup", "🚦")
-                    self.failures += [Irq1Workaround()]
+        if self.wakeup_irqs and 1 in self.wakeup_irqs and self.needs_irq1_workaround():
+            if self.irq1_workaround:
+                self.db.record_cycle_data(
+                    "Kernel workaround for IRQ1 issue utilized", "○"
+                )
+            else:
+                self.db.record_cycle_data("IRQ1 found during wakeup", "🚦")
+                self.failures += [Irq1Workaround()]
         if self.idle_masks:
             bit_changed = 0
             for i, mask_i in enumerate(self.idle_masks):
@@ -116,7 +115,7 @@ class AnalysisHelpers:
                     if mask_i != mask_j:
                         bit_changed = bit_changed | (int(mask_i, 16) & ~int(mask_j, 16))
             if bit_changed:
-                for bit in range(0, 31):
+                for bit in range(31):
                     if bit_changed & BIT(bit):
                         self.db.record_debug(
                             f"Idle mask bit {bit} (0x{BIT(bit):x}) changed during suspend",
@@ -181,7 +180,7 @@ class AnalysisHelpers:
         print_color(
             "In a hardware sleep state for {time} {percent_msg}".format(
                 time=timedelta(seconds=hw),
-                percent_msg="" if not percent else "({:.2%})".format(percent),
+                percent_msg="" if not percent else f"({percent:.2%})",
             ),
             symbol,
         )

@@ -7,21 +7,21 @@ This module contains the Intel specific prerequisites for s2idle.
 import os
 
 from amd_debug.common import read_file
-from amd_debug.intel import (
-    get_dmc_firmware_status,
-    get_intel_graphics_driver,
-    get_lps0_disabled,
-    intel_pmc_core_loaded,
-    IntelPmcCore,
-    parse_substate_requirements,
-)
-from amd_debug.prereq.base import PrerequisiteValidator
 from amd_debug.failures import (
     IntelDmcFirmwareMissing,
     MissingIntelGraphics,
     MissingIntelPmcCore,
     S0ixNotReached,
 )
+from amd_debug.intel import (
+    IntelPmcCore,
+    get_dmc_firmware_status,
+    get_intel_graphics_driver,
+    get_lps0_disabled,
+    intel_pmc_core_loaded,
+    parse_substate_requirements,
+)
+from amd_debug.prereq.base import PrerequisiteValidator
 
 
 class IntelPrerequisiteValidator(PrerequisiteValidator):

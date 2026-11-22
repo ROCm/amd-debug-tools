@@ -1,4 +1,3 @@
-#!/usr/bin/python3
 # SPDX-License-Identifier: MIT
 
 """
@@ -8,23 +7,20 @@ functions in the amd-debug-tools package.
 
 import logging
 import unittest
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
-from amd_debug.prereq.nvidia import NvidiaChecks
 from amd_debug.failures import (
     NvidiaS0ixDisabled,
     NvidiaS0ixUnsupported,
 )
 from amd_debug.nvidia import (
     KERNEL_NOTIFIERS_PARAM,
-    POWERD_UNIT,
     S0IX_DISABLED,
     S0IX_ENABLED,
     S0IX_NOT_SUPPORTED,
-    S0IX_PARAM,
     S0IX_SUPPORTED,
-    SUSPEND_UNITS,
 )
+from amd_debug.prereq.nvidia import NvidiaChecks
 
 
 class FakeNvidiaChecks(NvidiaChecks):
@@ -233,9 +229,7 @@ class TestNvidiaChecks(unittest.TestCase):
         return_value={KERNEL_NOTIFIERS_PARAM: "1"},
     )
     @patch("amd_debug.prereq.nvidia.get_nvidia_gpus")
-    def test_check_nvidia_suspend_units_kernel_notifiers(
-        self, mock_gpus, _mock_params
-    ):
+    def test_check_nvidia_suspend_units_kernel_notifiers(self, mock_gpus, _mock_params):
         """Test that the kernel sleep notifiers are the preferred method
 
         When the driver handles the notifications itself the systemd units
@@ -267,9 +261,7 @@ class TestNvidiaChecks(unittest.TestCase):
 
     @patch("amd_debug.prereq.nvidia.get_module_params", return_value={})
     @patch("amd_debug.prereq.nvidia.get_nvidia_gpus")
-    def test_check_nvidia_suspend_units_not_installed(
-        self, mock_gpus, _mock_params
-    ):
+    def test_check_nvidia_suspend_units_not_installed(self, mock_gpus, _mock_params):
         """Test that units which aren't installed are not a failure"""
         mock_gpus.return_value = [self._make_gpu()]
         with patch.object(self.validator, "_systemd_unit_exists", return_value=False):
@@ -378,7 +370,6 @@ class TestNvidiaChecks(unittest.TestCase):
         with patch("amd_debug.nvidia.os.path.exists", return_value=False):
             self.assertFalse(self.validator._systemd_unit_exists("foo.service"))
 
-
     @patch("amd_debug.prereq.nvidia.get_s0ix_param", return_value="1")
     @patch("amd_debug.prereq.nvidia.get_nvidia_gpus")
     def test_check_nvidia_s0ix_gpu_unsupported(self, mock_gpus, _mock_param):
@@ -387,7 +378,7 @@ class TestNvidiaChecks(unittest.TestCase):
             self._make_gpu(supported=True),
             self._make_gpu(supported=False),
         ]
-        result = self.validator.check_nvidia_s0ix()
+        self.validator.check_nvidia_s0ix()
         self.validator.db.record_prereq.assert_any_call(
             "NVIDIA GPU 0000:01:00.0 does not support S0ix", "🚦"
         )
@@ -397,7 +388,7 @@ class TestNvidiaChecks(unittest.TestCase):
     def test_check_nvidia_s0ix_gpu_enabled(self, mock_gpus, _mock_param):
         """Test the success message for a GPU with s0ix enabled"""
         mock_gpus.return_value = [self._make_gpu(supported=True, enabled=True)]
-        result = self.validator.check_nvidia_s0ix()
+        self.validator.check_nvidia_s0ix()
         self.validator.db.record_prereq.assert_any_call(
             "NVIDIA GPU 0000:01:00.0 has S0ix power management enabled", "✅"
         )

@@ -8,32 +8,27 @@ it resumes, and then analyses that data to work out what happened.
 """
 
 import os
-import re
 from datetime import datetime
 
 from packaging import version
 from pyudev import Context
 
-from amd_debug.sleep_report import SleepReport
-from amd_debug.database import SleepDatabase
-from amd_debug.battery import Batteries
-from amd_debug.power_rails import PowerRails
 from amd_debug.acpi import AcpicaTracer
+from amd_debug.battery import Batteries
 from amd_debug.common import (
-    read_file,
+    AmdTool,
     check_lockdown,
     print_color,
-    AmdTool,
+    read_file,
 )
+from amd_debug.database import SleepDatabase
 from amd_debug.kernel import get_kernel_log
-from amd_debug.failures import (
-    IommuPageFault,
-    RtcAlarmWrong,
-)
-from amd_debug.validator.capture import CaptureHelpers
+from amd_debug.power_rails import PowerRails
+from amd_debug.sleep_report import SleepReport
 from amd_debug.validator.analysis import AnalysisHelpers
-from amd_debug.validator.suspend import SuspendHelpers
+from amd_debug.validator.capture import CaptureHelpers
 from amd_debug.validator.intel import IntelCaptureHelpers
+from amd_debug.validator.suspend import SuspendHelpers
 from amd_debug.validator_headers import Headers
 
 
@@ -42,9 +37,8 @@ def soc_needs_irq1_wa(family, model, smu_version):
     if family == 0x17:
         if model in [0x68, 0x60]:
             return True
-    elif family == 0x19:
-        if model == 0x50:
-            return version.parse(smu_version) < version.parse("64.66.0")
+    elif family == 0x19 and model == 0x50:
+        return version.parse(smu_version) < version.parse("64.66.0")
     return False
 
 
@@ -166,8 +160,7 @@ class SleepValidator(
             # suspend stats interface is unavailable
             self.hw_sleep_duration = self.s0ix_residency
             self.db.record_debug(
-                "Using SLP_S0 residency as hardware sleep time: "
-                f"{self.s0ix_residency}"
+                f"Using SLP_S0 residency as hardware sleep time: {self.s0ix_residency}"
             )
         if not self.hw_sleep_duration:
             self.db.record_cycle_data("Did not reach hardware sleep state", "❌")
@@ -281,4 +274,3 @@ class SleepValidator(
             report_debug=False,
         )
         app.run(inc_prereq=False)
-        return

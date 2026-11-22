@@ -12,9 +12,9 @@ import random
 import time
 from datetime import datetime, timedelta
 
-from amd_debug.validator_headers import Headers
 from amd_debug.common import print_color, run_countdown
 from amd_debug.nvidia import suspend_units_enabled
+from amd_debug.validator_headers import Headers
 
 
 class SuspendHelpers:
@@ -32,7 +32,7 @@ class SuspendHelpers:
             with open(wakealarm, "w", encoding="utf-8") as w:
                 w.write("0")
             with open(wakealarm, "w", encoding="utf-8") as w:
-                w.write("+%s\n" % self.requested_duration)
+                w.write(f"+{self.requested_duration}\n")
         else:
             print_color("No RTC device found, please manually wake system", "🚦")
 
@@ -117,9 +117,7 @@ class SuspendHelpers:
                 return False
             finally:
                 os.close(fd)
-            if not self.toggle_nvidia(b"resume"):
-                return False
-            return True
+            return self.toggle_nvidia(b"resume")
 
     def unlock_session(self):
         """Unlock the session using logind"""

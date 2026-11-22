@@ -1,4 +1,3 @@
-#!/usr/bin/python3
 # SPDX-License-Identifier: MIT
 
 """
@@ -7,7 +6,6 @@ the amd-debug-tools package.
 """
 
 import logging
-import os
 import unittest
 from unittest.mock import patch
 
@@ -15,13 +13,13 @@ from amd_debug.nvidia import (
     DYNAMIC_PM_PARAM,
     GC6_NOT_SUPPORTED,
     GC6_SUPPORTED,
-    NvidiaGpu,
     S0IX_DISABLED,
     S0IX_ENABLED,
     S0IX_NOT_SUPPORTED,
     S0IX_PARAM,
     S0IX_SUPPORTED,
     S0IX_THRESHOLD_PARAM,
+    NvidiaGpu,
     get_driver_version,
     get_module_params,
     get_nvidia_gpus,
@@ -249,8 +247,7 @@ class TestGetModuleParams(unittest.TestCase):
         """Test that module parameters are parsed"""
         mock_exists.return_value = True
         mock_read_file.return_value = (
-            "EnableS0ixPowerManagement: 1\n"
-            "NVreg_DynamicPowerManagement: 0x03\n"
+            "EnableS0ixPowerManagement: 1\nNVreg_DynamicPowerManagement: 0x03\n"
         )
         params = get_module_params()
         self.assertEqual(params[S0IX_PARAM], "1")
@@ -277,9 +274,7 @@ class TestGetModuleParams(unittest.TestCase):
     def test_get_module_params_ignores_malformed(self, mock_exists, mock_read_file):
         """Test that lines without a colon are ignored"""
         mock_exists.return_value = True
-        mock_read_file.return_value = (
-            "malformed line\nEnableS0ixPowerManagement: 0\n"
-        )
+        mock_read_file.return_value = "malformed line\nEnableS0ixPowerManagement: 0\n"
         params = get_module_params()
         self.assertEqual(params[S0IX_PARAM], "0")
 

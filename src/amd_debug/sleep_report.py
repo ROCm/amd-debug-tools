@@ -1,17 +1,18 @@
 # SPDX-License-Identifier: MIT
 
-import os
-import re
-import math
-import stat
-import pathlib
 import html
+import math
+import os
+import pathlib
+import re
+import stat
 from datetime import datetime, timedelta
+
 import numpy as np
-from tabulate import tabulate
+import pandas as pd
 from jinja2 import Environment, FileSystemLoader
 from markupsafe import Markup
-import pandas as pd
+from tabulate import tabulate
 
 # Set matplotlib backend to non-interactive Agg to avoid requiring $DISPLAY
 os.environ.setdefault("MPLBACKEND", "Agg")
@@ -22,18 +23,18 @@ try:
 except ImportError:
     pass
 
-from amd_debug.database import SleepDatabase
-from amd_debug.power_rails import energy_to_joules
 from amd_debug.common import (
     AmdTool,
     Colors,
-    version,
     clear_temporary_message,
     get_group_color,
     get_log_priority,
     print_color,
     print_temporary_message,
+    version,
 )
+from amd_debug.database import SleepDatabase
+from amd_debug.power_rails import energy_to_joules
 
 
 def confirm_overwrite_report(fname) -> bool:
@@ -64,10 +65,10 @@ def confirm_overwrite_report(fname) -> bool:
 
 
 from amd_debug.failures import (
-    SpuriousWakeup,
     LowHardwareSleepResidency,
+    SpuriousWakeup,
 )
-from amd_debug.wake import WakeIRQ, WakeGPIO
+from amd_debug.wake import WakeGPIO, WakeIRQ
 
 
 def remove_duplicates(x):
@@ -207,7 +208,7 @@ class SleepReport(AmdTool):
         total_power = 0.0
         has_valid_data = False
         for rail_data in power_rails:
-            _t0, label, e0, e1, scale = rail_data
+            _t0, _label, e0, e1, scale = rail_data
             if e0 is None or e1 is None:
                 continue
 
@@ -369,7 +370,7 @@ class SleepReport(AmdTool):
 
         output = "\n━━━ Power Rail Consumption ━━━\n"
         output += "\n".join(rail_lines) + "\n"
-        output += f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        output += "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
         output += f"Total: {total_power:.3f}W\n"
 
         return output
@@ -379,8 +380,7 @@ class SleepReport(AmdTool):
         cycles = []
         debug = []
         tables = ["Wakeup Source"]
-        num = 0
-        for cycle in self.df["Start Time"]:
+        for num, cycle in enumerate(self.df["Start Time"]):
             if self.format == "html":
                 data = ""
                 for line in self.db.report_cycle_data(cycle).split("\n"):
@@ -420,7 +420,6 @@ class SleepReport(AmdTool):
                 debug.append(
                     {"cycle_num": num, "messages": messages, "priorities": priorities}
                 )
-            num += 1
         return cycles, debug
 
     def build_template(self, inc_prereq) -> str:
@@ -523,7 +522,7 @@ class SleepReport(AmdTool):
         }
         if self.fname:
             try:
-                resolved = pathlib.Path(self.fname).resolve()
+                pathlib.Path(self.fname).resolve()
             except (ValueError, OSError) as e:
                 raise ValueError(f"Invalid report file path: {self.fname}") from e
 
@@ -557,7 +556,7 @@ class SleepReport(AmdTool):
                     pass
                 raise
 
-            return "Report written to {f}".format(f=self.fname)
+            return f"Report written to {self.fname}"
         else:
             return template.render(context)
 
@@ -566,9 +565,10 @@ class SleepReport(AmdTool):
         import matplotlib  # pylint: disable=import-outside-toplevel
 
         matplotlib.use("Agg")
+        import io  # pylint: disable=import-outside-toplevel
+
         import matplotlib.pyplot as plt  # pylint: disable=import-outside-toplevel
         import seaborn as sns  # pylint: disable=import-outside-toplevel
-        import io  # pylint: disable=import-outside-toplevel
 
         if (
             "Average Power" not in self.df.columns
@@ -612,9 +612,10 @@ class SleepReport(AmdTool):
         import matplotlib  # pylint: disable=import-outside-toplevel
 
         matplotlib.use("Agg")
+        import io  # pylint: disable=import-outside-toplevel
+
         import matplotlib.pyplot as plt  # pylint: disable=import-outside-toplevel
         import seaborn as sns  # pylint: disable=import-outside-toplevel
-        import io  # pylint: disable=import-outside-toplevel
 
         plt.set_loglevel("warning")
         _fig, ax1 = plt.subplots()
@@ -657,11 +658,10 @@ class SleepReport(AmdTool):
 
         characters = print_temporary_message("Building report, please wait...")
 
-        if not self.df.empty:
-            # Build charts in the page for html format
-            if len(self.df.index) > 1 and self.format == "html":
-                self.build_battery_chart()
-                self.build_hw_sleep_chart()
+        # Build charts in the page for html format
+        if not self.df.empty and len(self.df.index) > 1 and self.format == "html":
+            self.build_battery_chart()
+            self.build_hw_sleep_chart()
 
         # Render the template using jinja
         msg = self.build_template(inc_prereq)

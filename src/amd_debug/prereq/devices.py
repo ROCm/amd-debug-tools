@@ -20,10 +20,12 @@ from amd_debug.failures import (
     MissingDriver,
 )
 
+logger = logging.getLogger(__name__)
+
 # test if fwupd can report device firmware versions
 try:
     import gi
-    from gi.repository import GLib as _
+    from gi.repository import GLib  # noqa: F401
 
     gi.require_version("Fwupd", "2.0")
     from gi.repository import Fwupd  # pylint: disable=wrong-import-position
@@ -118,9 +120,7 @@ class DeviceChecks:
 
     def capture_pci_acpi(self):
         """Map ACPI to PCI devices"""
-        devices = []
-        for dev in self.pyudev.list_devices(subsystem="pci"):
-            devices.append(dev)
+        devices = list(self.pyudev.list_devices(subsystem="pci"))
         debug_str = "PCI Slot | Vendor | Class | ID | ACPI path\n"
         for dev in devices:
             pci_id = dev.properties["PCI_ID"].lower()
@@ -197,14 +197,14 @@ class DeviceChecks:
             }
             interesting_plugins = ["nvme", "tpm", "uefi_capsule"]
             if device.get_plugin() in interesting_plugins:
-                logging.debug(
+                logger.debug(
                     "%s %s firmware version: '%s'",
                     device.get_vendor(),
                     device.get_name(),
                     device.get_version(),
                 )
-                logging.debug("| %s", device.get_guids())
-                logging.debug("└─%s", device.get_instance_ids())
+                logger.debug("| %s", device.get_guids())
+                logger.debug("└─%s", device.get_instance_ids())
             for item, ver in device_map.items():
                 if (
                     item in device.get_guids() or item in device.get_instance_ids()

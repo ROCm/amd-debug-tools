@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import fnmatch
 import sqlite3
-from typing import Optional, Sequence
+from typing import Sequence
 
 import pandas as pd
 
@@ -32,9 +32,7 @@ def list_rails(conn: sqlite3.Connection) -> pd.DataFrame:
     )
 
 
-def filter_rails(
-    rails: pd.DataFrame, patterns: Optional[Sequence[str]]
-) -> pd.DataFrame:
+def filter_rails(rails: pd.DataFrame, patterns: Sequence[str] | None) -> pd.DataFrame:
     """Keep rails whose label matches any glob in ``patterns``."""
     if not patterns:
         return rails
@@ -48,7 +46,7 @@ def load_window(
     conn: sqlite3.Connection,
     start: float,
     end: float,
-    rail_patterns: Optional[Sequence[str]] = None,
+    rail_patterns: Sequence[str] | None = None,
 ) -> pd.DataFrame:
     """Long-form DataFrame of raw energy samples joined with rail metadata."""
     rails = filter_rails(list_rails(conn), rail_patterns)
@@ -126,7 +124,7 @@ def derive_power(df: pd.DataFrame) -> pd.DataFrame:
     return pd.concat(pieces, ignore_index=True)
 
 
-def resample(df: pd.DataFrame, freq: Optional[str]) -> pd.DataFrame:
+def resample(df: pd.DataFrame, freq: str | None) -> pd.DataFrame:
     """Resample per rail; ``freq=None`` returns ``df`` unchanged.
 
     Power is derived from the original timestamps first.  Each bin then sums

@@ -74,16 +74,14 @@ class AmdStorageChecks:
                 valid_sata = True
 
         if invalid_nvme:
-            for disk, _name in invalid_nvme.items():
-                message = f"NVME {invalid_nvme[disk].strip()} is not configured for s2idle in BIOS"
+            for _name in invalid_nvme.values():
+                message = f"NVME {_name.strip()} is not configured for s2idle in BIOS"
                 self.db.record_prereq(message, "❌")
                 num = len(invalid_nvme) + len(valid_nvme)
-                self.failures += [AcpiNvmeStorageD3Enable(invalid_nvme[disk], num)]
+                self.failures += [AcpiNvmeStorageD3Enable(_name, num)]
         if valid_nvme:
-            for disk, _name in valid_nvme.items():
-                message = (
-                    f"NVME {valid_nvme[disk].strip()} is configured for s2idle in BIOS"
-                )
+            for _name in valid_nvme.values():
+                message = f"NVME {_name.strip()} is configured for s2idle in BIOS"
                 self.db.record_prereq(message, "✅")
         if has_sata:
             if valid_sata:

@@ -1,21 +1,18 @@
-#!/usr/bin/python3
 # SPDX-License-Identifier: MIT
 
 """
 This module contains unit tests for the installer functions in the amd-debug-tools package.
 """
-from unittest.mock import patch, mock_open, MagicMock
 
 import logging
 import subprocess
 import sys
 import unittest
+from unittest.mock import MagicMock, mock_open, patch
 
 from amd_debug.installer import (
-    Installer,
     DistroPackage,
-    FwupdPackage,
-    EdidDecodePackage,
+    Installer,
     TextualPackage,
     install_dep_superset,
     parse_args,

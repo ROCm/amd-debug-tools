@@ -12,10 +12,12 @@ import sys
 import threading
 import time
 from pathlib import Path
-from typing import Dict, Optional, Sequence
+from typing import Sequence
 
 from amd_debug import power_db as db
 from amd_debug.power_rails import IIO_DEVICES_ROOT, PowerRail, discover_rails
+
+logger = logging.getLogger(__name__)
 
 UNIT_NAME = "amd-power-capture.service"
 SERVICE_DESCRIPTION = "AMD per-rail power capture"
@@ -27,7 +29,7 @@ class CaptureService:
     def __init__(
         self,
         conn: sqlite3.Connection,
-        note: Optional[str] = None,
+        note: str | None = None,
         iio_root: Path = IIO_DEVICES_ROOT,
     ):
         self.conn = conn
@@ -43,14 +45,14 @@ class CaptureService:
         """Stop cleanly on SIGTERM/SIGINT."""
 
         def _handler(signum, _frame):
-            logging.info("received signal %s, stopping", signum)
+            logger.info("received signal %s, stopping", signum)
             self.stop()
 
         signal.signal(signal.SIGTERM, _handler)
         signal.signal(signal.SIGINT, _handler)
 
     def poll_once(
-        self, rails: Sequence[PowerRail], rail_ids: Dict[PowerRail, int]
+        self, rails: Sequence[PowerRail], rail_ids: dict[PowerRail, int]
     ) -> int:
         """Read all rails once; returns the number of rows written."""
         ts = time.time()
@@ -59,7 +61,7 @@ class CaptureService:
             try:
                 energy = rail.read_energy_raw()
             except (OSError, ValueError) as e:
-                logging.warning("read failed for %s: %s", rail.label, e)
+                logger.warning("read failed for %s: %s", rail.label, e)
                 continue
             rows.append((rail_ids[rail], ts, energy, rail.energy_scale))
         db.insert_samples(self.conn, rows)
@@ -72,30 +74,30 @@ class CaptureService:
             raise RuntimeError(
                 f"no power monitor rails discovered under {self.iio_root}"
             )
-        logging.info(
+        logger.info(
             "discovered %d rails across %d chips",
             len(rails),
             len({r.device for r in rails}),
         )
         rail_ids = db.upsert_rails(self.conn, rails)
         run_id = db.start_run(self.conn, note=self.note)
-        logging.info("capture run %d started; polling every %.3fs", run_id, interval_s)
+        logger.info("capture run %d started; polling every %.3fs", run_id, interval_s)
 
         next_tick = time.monotonic()
         try:
             while not self._stop.is_set():
                 n = self.poll_once(rails, rail_ids)
-                logging.debug("wrote %d rows", n)
+                logger.debug("wrote %d rows", n)
                 next_tick += interval_s
                 now = time.monotonic()
                 if next_tick <= now:
                     missed = int((now - next_tick) // interval_s) + 1
-                    logging.warning("falling behind, skipping %d tick(s)", missed)
+                    logger.warning("falling behind, skipping %d tick(s)", missed)
                     next_tick += missed * interval_s
                 self._stop.wait(timeout=max(0.0, next_tick - time.monotonic()))
         finally:
             db.end_run(self.conn, run_id)
-            logging.info("capture run %d ended", run_id)
+            logger.info("capture run %d ended", run_id)
 
 
 def user_unit_dir() -> Path:
@@ -134,9 +136,9 @@ def _systemd_quote(arg: str) -> str:
 def render_unit(
     exec_path: Path,
     *,
-    db_path: Optional[Path],
+    db_path: Path | None,
     interval_s: float,
-    note: Optional[str],
+    note: str | None,
     log_level: str,
 ) -> str:
     """Render the user unit with the capture options baked into ExecStart."""

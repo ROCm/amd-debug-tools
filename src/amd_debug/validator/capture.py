@@ -9,14 +9,12 @@ system suspends and after it resumes.
 
 import glob
 import os
-import re
 import subprocess
-import time
 
-from amd_debug.validator_headers import Headers
 from amd_debug.common import read_file
-from amd_debug.kernel import get_kernel_command_line
 from amd_debug.failures import RtcAlarmWrong
+from amd_debug.kernel import get_kernel_command_line
+from amd_debug.validator_headers import Headers
 
 
 def _cpuidle_state_index(name):
@@ -25,7 +23,7 @@ def _cpuidle_state_index(name):
     A lexical sort would put state10 before state2.
     """
     try:
-        return int(name[len("state"):])
+        return int(name[len("state") :])
     except ValueError:
         return -1
 
@@ -168,7 +166,7 @@ class CaptureHelpers:
             elif thunderbolt_device is not None:
                 if "USB4_TYPE" in thunderbolt_device.properties:
                     name = (
-                        f'USB4 {thunderbolt_device.properties["USB4_TYPE"]} controller'
+                        f"USB4 {thunderbolt_device.properties['USB4_TYPE']} controller"
                     )
                 sys_name = thunderbolt_device.sys_name
             elif thunderbolt_domain is not None:
@@ -196,7 +194,7 @@ class CaptureHelpers:
                     "ID_PCI_SUBCLASS_FROM_DATABASE" in pci.properties
                     and "ID_VENDOR_FROM_DATABASE" in pci.properties
                 ):
-                    name = f'{pci.properties["ID_VENDOR_FROM_DATABASE"]} {pci.properties["ID_PCI_SUBCLASS_FROM_DATABASE"]}'
+                    name = f"{pci.properties['ID_VENDOR_FROM_DATABASE']} {pci.properties['ID_PCI_SUBCLASS_FROM_DATABASE']}"
                 else:
                     name = f"PCI {pci.properties['PCI_CLASS']}"
             elif acpi is not None:
@@ -284,9 +282,7 @@ class CaptureHelpers:
 
     def capture_thermal(self):
         """Capture thermal zone information"""
-        devs = []
-        for dev in self.pyudev.list_devices(subsystem="acpi", DRIVER="thermal"):
-            devs.append(dev)
+        devs = list(self.pyudev.list_devices(subsystem="acpi", DRIVER="thermal"))
         if not devs:
             return
 
@@ -315,7 +311,7 @@ class CaptureHelpers:
                     continue
                 trip_count = trip_count + 1
 
-            for i in range(0, trip_count):
+            for i in range(trip_count):
                 f = os.path.join(p, f"trip_point_{i}_type")
                 trip_type = read_file(f)
                 f = os.path.join(p, f"trip_point_{i}_temp")
@@ -456,19 +452,14 @@ class CaptureHelpers:
             if delta_time <= 0 and delta_usage <= 0:
                 continue
             debug_str += (
-                f"│ {name}: {delta_time / 10**6:.2f}s "
-                f"({delta_usage} entries)\n"
+                f"│ {name}: {delta_time / 10**6:.2f}s ({delta_usage} entries)\n"
             )
             deepest = name
         if deepest is None:
-            self.db.record_debug(
-                "No C-state residency change during the cycle"
-            )
+            self.db.record_debug("No C-state residency change during the cycle")
         else:
             self.db.record_debug(debug_str)
-            self.db.record_cycle_data(
-                f"Deepest C-state entered: {deepest}", "💤"
-            )
+            self.db.record_cycle_data(f"Deepest C-state entered: {deepest}", "💤")
         self.cpu_cstates = after
 
     def _read_pci_power_states(self):
@@ -503,11 +494,7 @@ class CaptureHelpers:
         self.db.record_pci_power_state(states)
         for slot in sorted(states):
             driver, runtime_status, d3cold_allowed = states[slot]
-            if (
-                driver
-                and runtime_status == "suspended"
-                and d3cold_allowed == "1"
-            ):
+            if driver and runtime_status == "suspended" and d3cold_allowed == "1":
                 self.db.record_cycle_data(
                     f"{slot} ({driver}) is runtime suspended with D3cold "
                     "allowed and will enter D3cold during s2idle",
@@ -540,8 +527,7 @@ class CaptureHelpers:
             _old_driver, old_status, old_d3cold = before[slot]
             if old_status != runtime_status:
                 self.db.record_debug(
-                    f"{slot} runtime status changed: "
-                    f"{old_status} -> {runtime_status}"
+                    f"{slot} runtime status changed: {old_status} -> {runtime_status}"
                 )
             # devices that were runtime suspended before the suspend spend
             # the cycle in D3cold.  They are not expected to be active

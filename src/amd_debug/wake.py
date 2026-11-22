@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: MIT
 
 import os
+
 from pyudev import Context
 
 from amd_debug.common import read_file
@@ -22,7 +23,9 @@ class WakeGPIO:
 class WakeIRQ:
     """Class for wake IRQs"""
 
-    def __init__(self, num, context=Context()):
+    def __init__(self, num, context=None):
+        if context is None:
+            context = Context()
         self.num = num
         p = os.path.join("/", "sys", "kernel", "irq", str(num))
         try:
@@ -97,19 +100,20 @@ class WakeIRQ:
                                 t = os.path.join(root, "driver")
                                 if os.path.exists(t):
                                     try:
-                                        self.driver = os.path.basename(
-                                            os.readlink(t)
-                                        )
-                                    except (PermissionError, FileNotFoundError, OSError):
+                                        self.driver = os.path.basename(os.readlink(t))
+                                    except (
+                                        PermissionError,
+                                        FileNotFoundError,
+                                        OSError,
+                                    ):
                                         pass
                                 break
                         if self.name:
                             break
 
         # If the name isn't descriptive try to guess further
-        if self.driver and self.actions == self.name:
-            if self.driver == "i2c_hid_acpi":
-                self.name = f"{self.name} I2C HID device"
+        if self.driver and self.actions == self.name and self.driver == "i2c_hid_acpi":
+            self.name = f"{self.name} I2C HID device"
 
         # check if it's disabled
         if not self.name and wakeup == "disabled":

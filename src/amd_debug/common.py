@@ -4,19 +4,23 @@
 This module contains common utility functions and classes for various amd-debug-tools.
 """
 
+from __future__ import annotations
+
 import asyncio
 import importlib.metadata
 import logging
 import os
+import pathlib
 import platform
-import time
+import stat
 import struct
 import subprocess
 import sys
-import stat
-import pathlib
+import time
 from ast import literal_eval
 from datetime import date, timedelta
+
+logger = logging.getLogger(__name__)
 
 
 class Colors:
@@ -74,13 +78,13 @@ def print_color(message, group) -> None:
         prefix = ""
     log_txt = f"{prefix}{message}".strip()
     if any(c in color for c in [Colors.OK, Colors.HEADER, Colors.UNDERLINE]):
-        logging.info(log_txt)
+        logger.info(log_txt)
     elif color == Colors.WARNING:
-        logging.warning(log_txt)
+        logger.warning(log_txt)
     elif color == Colors.FAIL:
-        logging.error(log_txt)
+        logger.error(log_txt)
     else:
-        logging.debug(log_txt)
+        logger.debug(log_txt)
     if "TERM" in os.environ and os.environ["TERM"] == "dumb":
         suffix = ""
         color = ""
@@ -173,7 +177,7 @@ def _configure_log(prefix) -> str:
                     path, int(os.environ["SUDO_UID"]), int(os.environ["SUDO_GID"])
                 )
         except (ValueError, OSError) as e:
-            logging.warning(f"Cannot create safe log directory: {e}")
+            logger.warning(f"Cannot create safe log directory: {e}")
             log = "/dev/null"
             level = logging.WARNING
         else:
@@ -300,10 +304,10 @@ def reboot():
     async def reboot_dbus_fast():
         """Reboot using dbus-fast"""
         try:
+            from dbus_fast import BusType  # pylint: disable=import-outside-toplevel
             from dbus_fast.aio import (  # pylint: disable=import-outside-toplevel
                 MessageBus,
             )
-            from dbus_fast import BusType  # pylint: disable=import-outside-toplevel
 
             bus = await MessageBus(bus_type=BusType.SYSTEM).connect()
             introspection = await bus.introspect(
@@ -438,7 +442,7 @@ def read_msr(msr, cpu):
     return val
 
 
-def relaunch_sudo(pkexec: bool = False, extra_args: list = None) -> None:
+def relaunch_sudo(pkexec: bool = False, extra_args: list | None = None) -> None:
     """Relaunch the script with sudo or pkexec if not already running as root
 
     extra_args are appended to the re-exec'd command line (e.g. ["--accepted"])
@@ -446,7 +450,7 @@ def relaunch_sudo(pkexec: bool = False, extra_args: list = None) -> None:
     """
     if not is_root():
         binary = "pkexec" if pkexec else "sudo"
-        logging.debug(f"Relaunching with {binary}")
+        logger.debug(f"Relaunching with {binary}")
         argv = sys.argv + list(extra_args or [])
         env_vars = []
         vars_to_check = [
@@ -546,7 +550,7 @@ class AmdTool:
 
     def __init__(self, prefix):
         self.log = _configure_log(prefix)
-        logging.debug("command: %s (module: %s)", sys.argv, type(self).__name__)
-        logging.debug("Version: %s", version())
+        logger.debug("command: %s (module: %s)", sys.argv, type(self).__name__)
+        logger.debug("Version: %s", version())
         if os.uname().sysname != "Linux":
             raise RuntimeError("This tool only runs on Linux")

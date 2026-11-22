@@ -1,4 +1,3 @@
-#!/usr/bin/python3
 # SPDX-License-Identifier: MIT
 
 """
@@ -6,26 +5,22 @@ Unit tests for the Textual TUI in amd-debug-tools.
 """
 
 import os
-import sys
 import unittest
-import queue
-from unittest.mock import Mock, patch, MagicMock
 from datetime import datetime
+from unittest.mock import Mock, patch
 
-from rich.text import Text
-from amd_debug.triage import Status, Stage
+from amd_debug.triage import Stage, Status
 from amd_debug.tui import (
-    LogStream,
-    ConfirmModal,
     AskQuestionModal,
+    ConfirmModal,
     DatePickerModal,
     FileSavedModal,
-    WelcomeScreen,
+    LogStream,
     S2idleApp,
-    capture_output_to_log,
-    get_s2idle_cmd,
+    WelcomeScreen,
     build_elevated_cmd,
     get_elevation_env_vars,
+    get_s2idle_cmd,
 )
 
 
@@ -242,6 +237,7 @@ class TestDatePickerModal(unittest.TestCase):
 
     def test_blank_selection_shows_error(self):
         from datetime import date
+
         from textual.widgets import Select
 
         modal = DatePickerModal(date(2026, 2, 1))
@@ -323,6 +319,7 @@ class TestS2idleApp(unittest.TestCase):
     def test_default_tab_is_triage(self):
         """Verify that the TUI defaults to the triage tab"""
         import asyncio
+
         from textual.widgets import TabbedContent
 
         async def _run():

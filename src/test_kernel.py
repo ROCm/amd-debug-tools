@@ -1,24 +1,23 @@
-#!/usr/bin/python3
 # SPDX-License-Identifier: MIT
 
 """
 This module contains unit tests for the kernel log functions in the amd-debug-tools package.
 """
-from datetime import datetime
-from unittest.mock import patch, mock_open, MagicMock
 
+import logging
 import subprocess
 import unittest
-import logging
+from datetime import datetime
+from unittest.mock import MagicMock, mock_open, patch
 
 from amd_debug.kernel import (
-    sscanf_bios_args,
-    get_kernel_command_line,
-    redact_sensitive,
     DmesgLogger,
     InputFile,
     KernelLogger,
+    get_kernel_command_line,
     get_kernel_log,
+    redact_sensitive,
+    sscanf_bios_args,
 )
 
 
@@ -82,12 +81,8 @@ class TestKernelLog(unittest.TestCase):
         self.assertEqual(result, "cryptsetup: <redacted-uuid> mounted")
 
         # key/secret/password/token assignments are redacted
-        self.assertEqual(
-            redact_sensitive("luks key=abcd1234"), "luks key=<redacted>"
-        )
-        self.assertEqual(
-            redact_sensitive("token=deadbeef"), "token=<redacted>"
-        )
+        self.assertEqual(redact_sensitive("luks key=abcd1234"), "luks key=<redacted>")
+        self.assertEqual(redact_sensitive("token=deadbeef"), "token=<redacted>")
 
         # Ordinary log text is preserved
         line = "amd_pmc AMDI0009:00: SMU idlemask s0i3: 0x1234abcd"

@@ -13,9 +13,9 @@ import subprocess
 
 from amd_debug.battery import Batteries
 from amd_debug.common import (
+    BIT,
     get_pretty_distro,
     read_file,
-    BIT,
 )
 from amd_debug.failures import (
     DeepSleep,
@@ -232,6 +232,6 @@ class SystemChecks:
             self.db.record_debug("LOGIND: no configuration changes")
             return True
         self.db.record_debug("LOGIND: configuration changes:")
-        for key in section.keys():
+        for key in section:
             self.db.record_debug(f"\t{key}: {section[key]}")
         return True

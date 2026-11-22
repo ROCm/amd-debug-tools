@@ -1,15 +1,14 @@
-#!/usr/bin/python3
 # SPDX-License-Identifier: MIT
 
 """
 This module contains unit tests for the acpi functions in the amd-debug-tools package.
 """
-from unittest.mock import patch, mock_open, call
 
 import logging
 import unittest
+from unittest.mock import mock_open, patch
 
-from amd_debug.acpi import search_acpi_tables, AcpicaTracer, ACPI_METHOD
+from amd_debug.acpi import ACPI_METHOD, AcpicaTracer, search_acpi_tables
 
 
 class TestAcpi(unittest.TestCase):
@@ -52,7 +51,6 @@ class TestAcpi(unittest.TestCase):
         with patch("os.listdir", return_value=mock_listdir), patch(
             "builtins.open", mock_open(read_data=b"foo")
         ), patch("os.path.exists", return_value=True):
-
             tracer = AcpicaTracer()
             self.assertTrue(tracer.supported)
 
@@ -67,7 +65,6 @@ class TestAcpi(unittest.TestCase):
         with patch("os.listdir", return_value=mock_listdir), patch(
             "builtins.open", mock_open(read_data=mock_file_content)
         ), patch("os.path.exists", return_value=True):
-
             tracer = AcpicaTracer()
             self.assertTrue(tracer.supported)
 

@@ -4,10 +4,10 @@
 This module contains the AMD specific prerequisites for s2idle.
 """
 
-from amd_debug.prereq.base import PrerequisiteValidator
 from amd_debug.prereq.amd_gpu import AmdGpuChecks
-from amd_debug.prereq.amd_storage import AmdStorageChecks
 from amd_debug.prereq.amd_platform import AmdPlatformChecks
+from amd_debug.prereq.amd_storage import AmdStorageChecks
+from amd_debug.prereq.base import PrerequisiteValidator
 
 
 class AmdPrerequisiteValidator(

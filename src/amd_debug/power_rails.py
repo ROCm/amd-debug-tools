@@ -18,12 +18,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Set
 
 IIO_DEVICES_ROOT = Path("/sys/bus/iio/devices")
 
 # Supported power monitor chip names (extensible set)
-SUPPORTED_POWER_CHIPS: Set[str] = {
+SUPPORTED_POWER_CHIPS: set[str] = {
     "pac1954",
 }
 
@@ -81,7 +80,9 @@ class PowerRail:
         return _read_float(self.sysfs / f"in_energy{self.channel}_raw")
 
 
-def _discover_chip_rails(device_dir: Path, chip_ids: Set[str] = None) -> list[PowerRail]:
+def _discover_chip_rails(
+    device_dir: Path, chip_ids: set[str] | None = None
+) -> list[PowerRail]:
     """Discover all enabled power rails for a single IIO device.
 
     Args:
@@ -141,7 +142,7 @@ def _discover_chip_rails(device_dir: Path, chip_ids: Set[str] = None) -> list[Po
 
 def discover_rails(
     iio_root: Path = IIO_DEVICES_ROOT,
-    chip_ids: Set[str] = None,
+    chip_ids: set[str] | None = None,
 ) -> list[PowerRail]:
     """Discover all IIO power monitor rails on the system.
 

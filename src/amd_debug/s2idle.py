@@ -1,28 +1,30 @@
 # SPDX-License-Identifier: MIT
 """s2idle analysis tool"""
 
-import argparse
-import sys
-import os
-import subprocess
-import sqlite3
+from __future__ import annotations
 
-from datetime import date, timedelta, datetime
+import argparse
+import os
+import sqlite3
+import subprocess
+import sys
+from datetime import date, datetime, timedelta
+from typing import ClassVar
+
 from amd_debug.common import (
-    convert_string_to_bool,
     colorize_choices,
+    convert_string_to_bool,
     is_root,
     relaunch_sudo,
+    running_ssh,
     show_log_info,
     version,
-    running_ssh,
 )
-
-from amd_debug.validator import SleepValidator
 from amd_debug.installer import Installer
 from amd_debug.prereq import get_validator
 from amd_debug.sleep_report import SleepReport, confirm_overwrite_report
 from amd_debug.triage import Triage, confirm_start
+from amd_debug.validator import SleepValidator
 
 
 class Defaults:
@@ -33,8 +35,8 @@ class Defaults:
     count = 1
     since = date.today() - timedelta(days=60)
     until = date.today() + timedelta(days=1)
-    format_choices = ["txt", "md", "html", "stdout"]
-    boolean_choices = ["true", "false"]
+    format_choices: ClassVar[list[str]] = ["txt", "md", "html", "stdout"]
+    boolean_choices: ClassVar[list[str]] = ["true", "false"]
 
 
 class Headers:

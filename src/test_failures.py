@@ -1,15 +1,13 @@
-#!/usr/bin/python3
 # SPDX-License-Identifier: MIT
 
 """
 This module contains unit tests for the failure functions in the amd-debug-tools package.
 """
 
-from unittest.mock import patch, call
-
 import logging
-import unittest
 import os
+import unittest
+from unittest.mock import call, patch
 
 import amd_debug.failures
 

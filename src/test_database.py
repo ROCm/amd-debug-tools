@@ -1,4 +1,3 @@
-#!/usr/bin/python3
 # SPDX-License-Identifier: MIT
 
 """
@@ -7,9 +6,8 @@ This module contains unit tests for the datbase functions in the amd-debug-tools
 
 import os
 import unittest
-
 from datetime import datetime
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 from amd_debug.database import SCHEMA_VERSION, SleepDatabase, default_database_path
 
@@ -20,6 +18,7 @@ class TestTriageMigration(unittest.TestCase):
     def test_migrate_to_triage(self):
         """Test the triage tables are created from schema 4"""
         import sqlite3  # pylint: disable=import-outside-toplevel
+
         from amd_debug.database import (
             migrate,
         )  # pylint: disable=import-outside-toplevel
@@ -37,6 +36,7 @@ class TestTriageMigration(unittest.TestCase):
     def test_migrate_verified_backfill(self):
         """Test the verified column is backfilled from the prose messages"""
         import sqlite3  # pylint: disable=import-outside-toplevel
+
         from amd_debug.database import (
             migrate,
         )  # pylint: disable=import-outside-toplevel
@@ -68,6 +68,7 @@ class TestTriageMigration(unittest.TestCase):
     def test_migrate_schema_0_idempotent_priority(self):
         """Test migrating from schema 0 when debug already has priority column"""
         import sqlite3  # pylint: disable=import-outside-toplevel
+
         from amd_debug.database import (
             migrate,
         )  # pylint: disable=import-outside-toplevel
@@ -84,6 +85,7 @@ class TestTriageMigration(unittest.TestCase):
     def test_new_database_file_init(self):
         """Test initializing a new SleepDatabase on a filesystem path"""
         import tempfile  # pylint: disable=import-outside-toplevel
+
         from amd_debug.database import (
             SleepDatabase,
         )  # pylint: disable=import-outside-toplevel
@@ -569,23 +571,23 @@ class TestSleepDatabase(unittest.TestCase):
 
     def test_default_database_path_sudo_user(self):
         """Test default database path uses home directory of SUDO_USER"""
-        with patch.dict(os.environ, {"SUDO_USER": "testuser"}, clear=True):
-            with patch("os.path.expanduser", return_value="/home/testuser"):
-                self.assertEqual(
-                    default_database_path(),
-                    "/home/testuser/.local/share/amd-debug-tools/data.db",
-                )
+        with patch.dict(os.environ, {"SUDO_USER": "testuser"}, clear=True), patch(
+            "os.path.expanduser", return_value="/home/testuser"
+        ):
+            self.assertEqual(
+                default_database_path(),
+                "/home/testuser/.local/share/amd-debug-tools/data.db",
+            )
 
     def test_default_database_path_unprivileged_user(self):
         """Test default database path uses home directory of unprivileged user"""
-        with patch.dict(os.environ, {}, clear=True):
-            with patch("os.path.expanduser", return_value="/home/normaluser"), patch(
-                "amd_debug.database.is_root", return_value=False
-            ):
-                self.assertEqual(
-                    default_database_path(),
-                    "/home/normaluser/.local/share/amd-debug-tools/data.db",
-                )
+        with patch.dict(os.environ, {}, clear=True), patch(
+            "os.path.expanduser", return_value="/home/normaluser"
+        ), patch("amd_debug.database.is_root", return_value=False):
+            self.assertEqual(
+                default_database_path(),
+                "/home/normaluser/.local/share/amd-debug-tools/data.db",
+            )
 
     @patch("amd_debug.database.is_root", return_value=True)
     def test_default_database_path_root_systemd(self, _mock_root):
@@ -616,17 +618,16 @@ class TestSleepDatabase(unittest.TestCase):
             os.environ,
             {"SUDO_USER": "testuser", "SUDO_UID": "1000", "SUDO_GID": "1000"},
             clear=True,
-        ):
-            with patch("os.path.expanduser", return_value="/home/testuser"):
-                SleepDatabase()
-                mock_makedirs.assert_called_once_with(
-                    "/home/testuser/.local/share/amd-debug-tools",
-                    mode=0o755,
-                    exist_ok=True,
-                )
-                mock_lchown.assert_any_call(
-                    "/home/testuser/.local/share/amd-debug-tools", 1000, 1000
-                )
+        ), patch("os.path.expanduser", return_value="/home/testuser"):
+            SleepDatabase()
+            mock_makedirs.assert_called_once_with(
+                "/home/testuser/.local/share/amd-debug-tools",
+                mode=0o755,
+                exist_ok=True,
+            )
+            mock_lchown.assert_any_call(
+                "/home/testuser/.local/share/amd-debug-tools", 1000, 1000
+            )
 
     def test_schema_migration_v1_to_v3(self):
         """Test database migration to the current schema"""

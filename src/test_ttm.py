@@ -1,15 +1,15 @@
-#!/usr/bin/python3
 # SPDX-License-Identifier: MIT
 
 """
 This module contains unit tests for the ttm tool in the amd-debug-tools package.
 """
-import unittest
-import sys
+
 import logging
+import sys
+import unittest
 from unittest import mock
 
-from amd_debug.ttm import main, parse_args, AmdTtmTool, maybe_reboot
+from amd_debug.ttm import AmdTtmTool, main, maybe_reboot, parse_args
 
 
 class TestParseArgs(unittest.TestCase):

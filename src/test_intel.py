@@ -1,4 +1,3 @@
-#!/usr/bin/python3
 # SPDX-License-Identifier: MIT
 
 """
@@ -11,16 +10,16 @@ import unittest
 from unittest.mock import patch
 
 from amd_debug.intel import (
+    S0IX_SUBSTATES,
+    IntelPmcCore,
     get_dmc_firmware_status,
     get_dmc_info_path,
     get_intel_graphics_driver,
     get_lps0_disabled,
     intel_pmc_core_loaded,
-    IntelPmcCore,
     parse_counter_file,
     parse_substate_requirements,
     parse_substate_residencies,
-    S0IX_SUBSTATES,
 )
 
 SUBSTATE_RESIDENCIES = """pmc0        Substate     Residency
@@ -501,8 +500,7 @@ class TestIntelReaderEdges(unittest.TestCase):
     def test_parse_counter_file(self):
         """Test the counter file parser"""
         counters = parse_counter_file(
-            "Package C2 : 743538\nPackage C3 : 1250\ngarbage\n"
-            "Package C6 : notanumber\n"
+            "Package C2 : 743538\nPackage C3 : 1250\ngarbage\nPackage C6 : notanumber\n"
         )
         self.assertEqual(counters, {"Package C2": 743538, "Package C3": 1250})
 

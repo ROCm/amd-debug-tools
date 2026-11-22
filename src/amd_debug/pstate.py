@@ -1,14 +1,16 @@
 # SPDX-License-Identifier: MIT
 """CPPC triage script for AMD systems"""
 
-import os
+from __future__ import annotations
+
 import argparse
+import os
 import re
 import sys
 
 import pandas as pd
-from tabulate import tabulate
 from pyudev import Context
+from tabulate import tabulate
 
 from amd_debug.common import (
     AmdTool,
@@ -154,8 +156,9 @@ class AmdPstateTriage(AmdTool):
 
         df = df.sort_values(by="CPU #")
         print_color(
-            "Per-CPU sysfs files\n%s"
-            % tabulate(df, headers="keys", tablefmt="psql", showindex=False),
+            "Per-CPU sysfs files\n{}".format(
+                tabulate(df, headers="keys", tablefmt="psql", showindex=False)
+            ),
             "🔋",
         )
 
@@ -251,22 +254,25 @@ class AmdPstateTriage(AmdTool):
 
         msr_df = msr_df.sort_values(by="CPU #")
         print_color(
-            "CPPC MSRs\n%s"
-            % tabulate(msr_df, headers="keys", tablefmt="psql", showindex=False),
+            "CPPC MSRs\n{}".format(
+                tabulate(msr_df, headers="keys", tablefmt="psql", showindex=False)
+            ),
             "🔋",
         )
 
         cap_df = cap_df.sort_values(by="CPU #")
         print_color(
-            "MSR_AMD_CPPC_CAP1 (decoded)\n%s"
-            % tabulate(cap_df, headers="keys", tablefmt="psql", showindex=False),
+            "MSR_AMD_CPPC_CAP1 (decoded)\n{}".format(
+                tabulate(cap_df, headers="keys", tablefmt="psql", showindex=False)
+            ),
             "🔋",
         )
 
         df = df.sort_values(by="CPU #")
         print_color(
-            "MSR_AMD_CPPC_REQ (decoded)\n%s"
-            % tabulate(df, headers="keys", tablefmt="psql", showindex=False),
+            "MSR_AMD_CPPC_REQ (decoded)\n{}".format(
+                tabulate(df, headers="keys", tablefmt="psql", showindex=False)
+            ),
             "🔋",
         )
 

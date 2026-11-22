@@ -1,4 +1,3 @@
-#!/usr/bin/python3
 # SPDX-License-Identifier: MIT
 
 """
@@ -9,15 +8,14 @@ amd-debug-tools package.
 import logging
 import subprocess
 import unittest
-from unittest.mock import patch, MagicMock, mock_open
+from unittest.mock import MagicMock, mock_open, patch
 
-from amd_debug.prereq.base import PrerequisiteValidator
+from amd_debug.common import BIT, apply_prefix_wrapper
 from amd_debug.failures import *
-from amd_debug.common import apply_prefix_wrapper, BIT
+from amd_debug.prereq.base import PrerequisiteValidator
 
 
 class TestPrerequisiteValidator(unittest.TestCase):
-
     @classmethod
     def setUpClass(cls):
         logging.basicConfig(filename="/dev/null", level=logging.DEBUG)
@@ -432,8 +430,8 @@ class TestPrerequisiteValidator(unittest.TestCase):
     @patch("amd_debug.prereq.devices.read_file")
     def test_check_i2c_hid_with_devices(self, mock_read_file, mock_path_exists):
         """Test check_i2c_hid when I2C HID devices are found"""
-        mock_path_exists.side_effect = (
-            lambda p: "firmware_node/path" in p or "firmware_node/hid" in p
+        mock_path_exists.side_effect = lambda p: (
+            "firmware_node/path" in p or "firmware_node/hid" in p
         )
         mock_read_file.side_effect = lambda p: (
             "mocked_path" if "path" in p else "mocked_hid"
@@ -465,8 +463,8 @@ class TestPrerequisiteValidator(unittest.TestCase):
     @patch("amd_debug.prereq.devices.read_file")
     def test_check_i2c_hid_with_buggy_device(self, mock_read_file, mock_path_exists):
         """Test check_i2c_hid when a buggy I2C HID device is found"""
-        mock_path_exists.side_effect = (
-            lambda p: "firmware_node/path" in p or "firmware_node/hid" in p
+        mock_path_exists.side_effect = lambda p: (
+            "firmware_node/path" in p or "firmware_node/hid" in p
         )
         mock_read_file.side_effect = lambda p: (
             "mocked_path" if "path" in p else "mocked_hid"
@@ -608,7 +606,7 @@ class TestPrerequisiteValidator(unittest.TestCase):
     def test_get_cpu_vendor_missing_model_name(self, mock_read_file):
         """Test get_cpu_vendor when model name is missing in /proc/cpuinfo"""
         mock_read_file.return_value = (
-            "vendor_id\t: AuthenticAMD\n" "cpu family\t: 23\n" "model\t\t: 1\n"
+            "vendor_id\t: AuthenticAMD\ncpu family\t: 23\nmodel\t\t: 1\n"
         )
         vendor = self.validator.get_cpu_vendor()
         self.assertEqual(vendor, "AuthenticAMD")
@@ -621,7 +619,7 @@ class TestPrerequisiteValidator(unittest.TestCase):
     def test_get_cpu_vendor_missing_vendor_id(self, mock_read_file):
         """Test get_cpu_vendor when vendor_id is missing in /proc/cpuinfo"""
         mock_read_file.return_value = (
-            "cpu family\t: 23\n" "model\t\t: 1\n" "model name\t: AMD Ryzen 7 3700X\n"
+            "cpu family\t: 23\nmodel\t\t: 1\nmodel name\t: AMD Ryzen 7 3700X\n"
         )
         vendor = self.validator.get_cpu_vendor()
         self.assertEqual(vendor, "")
@@ -636,9 +634,7 @@ class TestPrerequisiteValidator(unittest.TestCase):
     def test_get_cpu_vendor_missing_cpu_family(self, mock_read_file):
         """Test get_cpu_vendor when cpu family is missing in /proc/cpuinfo"""
         mock_read_file.return_value = (
-            "vendor_id\t: AuthenticAMD\n"
-            "model\t\t: 1\n"
-            "model name\t: AMD Ryzen 7 3700X\n"
+            "vendor_id\t: AuthenticAMD\nmodel\t\t: 1\nmodel name\t: AMD Ryzen 7 3700X\n"
         )
         vendor = self.validator.get_cpu_vendor()
         self.assertEqual(vendor, "AuthenticAMD")
@@ -868,9 +864,7 @@ class TestPrerequisiteValidator(unittest.TestCase):
         self.mock_pyudev.list_devices.return_value = [
             MagicMock(properties={"INTERFACE": "eth0"})
         ]
-        mock_check_output.return_value = (
-            "Supports Wake-on: g\n" "Wake-on: g\n"
-        ).encode("utf-8")
+        mock_check_output.return_value = b"Supports Wake-on: g\nWake-on: g\n"
 
         result = self.validator.check_network()
         self.assertTrue(result)
@@ -883,9 +877,7 @@ class TestPrerequisiteValidator(unittest.TestCase):
         self.mock_pyudev.list_devices.return_value = [
             MagicMock(properties={"INTERFACE": "eth0"})
         ]
-        mock_check_output.return_value = (
-            "Supports Wake-on: g\n" "Wake-on: d\n"
-        ).encode("utf-8")
+        mock_check_output.return_value = b"Supports Wake-on: g\nWake-on: d\n"
 
         result = self.validator.check_network()
         self.assertTrue(result)
@@ -901,7 +893,7 @@ class TestPrerequisiteValidator(unittest.TestCase):
         self.mock_pyudev.list_devices.return_value = [
             MagicMock(properties={"INTERFACE": "eth0"})
         ]
-        mock_check_output.return_value = ("Supports Wake-on: d\n").encode("utf-8")
+        mock_check_output.return_value = b"Supports Wake-on: d\n"
 
         result = self.validator.check_network()
         self.assertTrue(result)
@@ -1094,7 +1086,7 @@ class TestPrerequisiteValidator(unittest.TestCase):
     @patch("amd_debug.prereq.base.os.path.exists")
     def test_capture_nvidia_version_file_missing(self, mock_exists):
         """Test capture_nvidia when /proc/driver/nvidia/version does not exist"""
-        mock_exists.side_effect = lambda p: False if "version" in p else True
+        mock_exists.side_effect = lambda p: not "version" in p
         result = self.validator.capture_nvidia()
         self.assertTrue(result)
         self.mock_db.record_debug_file.assert_not_called()
@@ -1107,9 +1099,7 @@ class TestPrerequisiteValidator(unittest.TestCase):
         def exists_side_effect(path):
             if "version" in path:
                 return True
-            if "gpus" in path:
-                return False
-            return True
+            return "gpus" not in path
 
         mock_exists.side_effect = exists_side_effect
         result = self.validator.capture_nvidia()
@@ -1143,7 +1133,7 @@ class TestPrerequisiteValidator(unittest.TestCase):
     @patch("amd_debug.prereq.base.os.path.exists")
     def test_capture_nvidia_permission_error_on_version(self, mock_exists, mock_walk):
         """Test capture_nvidia when PermissionError occurs reading version file"""
-        mock_exists.side_effect = lambda p: True if "version" in p else False
+        mock_exists.side_effect = lambda p: "version" in p
         self.mock_db.record_debug_file.side_effect = PermissionError
         result = self.validator.capture_nvidia()
         self.assertTrue(result)
@@ -1255,20 +1245,19 @@ class TestBaseCoverageBranches(unittest.TestCase):
             "amd_debug.prereq.base.pyudev.Context"
         ) as mock_pyudev, patch(
             "amd_debug.prereq.base.get_distro", return_value="Test OS"
-        ), patch(
-            "amd_debug.prereq.base.read_file", return_value="quiet"
-        ), patch("amd_debug.prereq.base.Display"):
+        ), patch("amd_debug.prereq.base.read_file", return_value="quiet"), patch(
+            "amd_debug.prereq.base.Display"
+        ):
             self.validator = PrerequisiteValidator(tool_debug=True)
             self.mock_db = mock_db.return_value
             self.mock_pyudev = mock_pyudev.return_value
 
     def test_init_requires_root(self):
         """Test that construction fails without root"""
-        with patch(
-            "amd_debug.prereq.base.get_kernel_log"
-        ), patch("amd_debug.prereq.base.is_root", return_value=False):
-            with self.assertRaises(PermissionError):
-                PrerequisiteValidator(tool_debug=True)
+        with patch("amd_debug.prereq.base.get_kernel_log"), patch(
+            "amd_debug.prereq.base.is_root", return_value=False
+        ), self.assertRaises(PermissionError):
+            PrerequisiteValidator(tool_debug=True)
 
     @patch("amd_debug.prereq.base.read_file", side_effect=FileNotFoundError)
     def test_get_cpu_vendor_unreadable(self, _mock_read):
@@ -1301,9 +1290,7 @@ class TestBaseCoverageBranches(unittest.TestCase):
         self.mock_db.report_debug.return_value = [("debug line\nsecond",)]
         for debug in (True, False):
             self.validator.debug = debug
-            with patch(
-                "amd_debug.prereq.base.print_color"
-            ) as mock_print, patch(
+            with patch("amd_debug.prereq.base.print_color") as mock_print, patch(
                 "amd_debug.prereq.base.logging.debug"
             ):
                 self.validator.failures = [SleepModeWrong()]
@@ -1337,9 +1324,7 @@ class TestBaseCoverageBranches(unittest.TestCase):
         """Test the logind configuration capture"""
         config = MagicMock()
         config.read.return_value = None
-        section = MagicMock()
-        section.keys.return_value = ["IdleAction"]
-        section.__getitem__.side_effect = lambda key: "ignore"
+        section = {"IdleAction": "ignore"}
         config.__getitem__.return_value = section
         mock_config.return_value = config
         self.validator.capture_logind()
@@ -1363,8 +1348,8 @@ class TestBaseCoverageBranches(unittest.TestCase):
 
     def test_check_logger_dmesg_wrapped(self):
         """Test the logger check with a wrapped kernel ring buffer"""
-        from amd_debug.kernel import DmesgLogger
         from amd_debug.failures import KernelRingBufferWrapped
+        from amd_debug.kernel import DmesgLogger
 
         logger = DmesgLogger.__new__(DmesgLogger)
         logger.capture_header = lambda: "no version here"
@@ -1372,10 +1357,7 @@ class TestBaseCoverageBranches(unittest.TestCase):
         result = self.validator.check_logger()
         self.assertFalse(result)
         self.assertTrue(
-            any(
-                isinstance(f, KernelRingBufferWrapped)
-                for f in self.validator.failures
-            )
+            any(isinstance(f, KernelRingBufferWrapped) for f in self.validator.failures)
         )
 
     def test_check_logger_systemd(self):
@@ -1440,9 +1422,7 @@ class TestBaseCoverageBranches(unittest.TestCase):
                 device.get_version.return_value = "0.1.26"
                 device.get_plugin.return_value = "nvme"
                 device.get_name.return_value = "NVME DEVICE"
-                with patch.object(
-                    devices_module.Fwupd, "Client"
-                ) as mock_client:
+                with patch.object(devices_module.Fwupd, "Client") as mock_client:
                     mock_client.return_value.get_devices.return_value = [device]
                     result = self.validator.check_device_firmware()
         finally:
@@ -1451,7 +1431,9 @@ class TestBaseCoverageBranches(unittest.TestCase):
 
         self.assertTrue(result)
         self.mock_db.record_prereq.assert_called_once()
-        self.assertIn("Upgrade the firmware", self.mock_db.record_prereq.call_args[0][0])
+        self.assertIn(
+            "Upgrade the firmware", self.mock_db.record_prereq.call_args[0][0]
+        )
 
     def test_capture_pci_acpi_single_device(self):
         """Test the pci to acpi mapping table prefixes"""

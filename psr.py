@@ -1,8 +1,9 @@
 #!/usr/bin/python3
 # SPDX-License-Identifier: MIT
 """PSR identification script for AMD systems"""
-import sys
+
 import os
+import sys
 
 PSR_SUPPORT = {
     0: "PSR Unsupported",
@@ -18,7 +19,7 @@ TCON = {0x001CF8: "Parade"}
 def decode_psr_support(f):
     f.seek(0x70)
     v = int.from_bytes(f.read(1), "little")
-    print("○ %s [%d]" % (PSR_SUPPORT[v], v))
+    print(f"○ {PSR_SUPPORT[v]} [{v}]")
 
 
 def get_id_string(f):
@@ -31,32 +32,28 @@ def get_id_string(f):
     if v in TCON:
         oui_str = TCON[v]
     else:
-        oui_str = "-".join("{:02x}".format(c) for c in oui)
-    print("○ Sink OUI: %s" % oui_str)
-    print("○ resv_40f: " + ":".join("{:02x}".format(c) for c in resv_40f))
-    print("○ ID String: " + "-".join("{:02x}".format(c) for c in reversed(id)))
+        oui_str = "-".join(f"{c:02x}" for c in oui)
+    print(f"○ Sink OUI: {oui_str}")
+    print("○ resv_40f: " + ":".join(f"{c:02x}" for c in resv_40f))
+    print("○ ID String: " + "-".join(f"{c:02x}" for c in reversed(id)))
 
 
 def get_psr_error(f):
     f.seek(0x2006)
     err = f.read(3)
-    print("○ PSR Status: " + "-".join("{:02x}".format(c) for c in err))
+    print("○ PSR Status: " + "-".join(f"{c:02x}" for c in err))
 
 
 def get_dmcub():
     base = "/sys/kernel/debug/dri"
-    for num in range(0, 3):
-        fw_info = os.path.join(base, "%s" % num, "amdgpu_firmware_info")
+    for num in range(3):
+        fw_info = os.path.join(base, f"{num}", "amdgpu_firmware_info")
         if not os.path.exists(fw_info):
             continue
         with open(fw_info, "r") as f:
             for line in f.read().split("\n"):
                 if "DMCUB" in line:
-                    print(
-                        "DRI device {device} DMCUB F/W version: {version}".format(
-                            device=num, version=line.split()[-1]
-                        )
-                    )
+                    print(f"DRI device {num} DMCUB F/W version: {line.split()[-1]}")
 
 
 def discover_gpu():

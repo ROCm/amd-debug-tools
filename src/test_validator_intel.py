@@ -1,4 +1,3 @@
-#!/usr/bin/python3
 # SPDX-License-Identifier: MIT
 
 """
@@ -8,7 +7,7 @@ capture functions in the amd-debug-tools package.
 
 import logging
 import unittest
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 from amd_debug.validator.intel import IntelCaptureHelpers
 
@@ -84,9 +83,7 @@ class TestIntelCaptureHelpers(unittest.TestCase):
         self.validator.db.record_cycle_data.assert_not_called()
 
     @patch("amd_debug.validator.intel.IntelPmcCore")
-    def test_capture_intel_s0ix_residency_restored_baseline(
-        self, mock_pmc
-    ):
+    def test_capture_intel_s0ix_residency_restored_baseline(self, mock_pmc):
         """Test that the baseline is restored from the database
 
         The post-resume capture runs in a separate process when using the

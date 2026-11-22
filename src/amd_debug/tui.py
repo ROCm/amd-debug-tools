@@ -386,11 +386,11 @@ class FileSavedModal(ModalScreen):
             yield Label("Saved to:", classes="modal-message")
             yield Static(self.fname, classes="file-path")
             with Horizontal(classes="modal-buttons"):
-                yield Button("Cancel", variant="default", id="fs-cancel")
-                yield Button("OK", variant="primary", id="fs-ok")
+                yield Button("Close Dialog", variant="default", id="fs-close")
+                yield Button("Open Report", variant="primary", id="fs-open")
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
-        if event.button.id in ("fs-ok", "fs-open"):
+        if event.button.id == "fs-open":
             import subprocess
 
             subprocess.Popen(

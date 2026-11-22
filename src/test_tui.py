@@ -176,29 +176,51 @@ class TestModals(unittest.TestCase):
         modal.dismiss.assert_called_with("default_val")
 
     @patch("subprocess.Popen")
-    def test_file_saved_modal_open_on_ok(self, mock_popen):
+    def test_file_saved_modal_open_report(self, mock_popen):
         modal = FileSavedModal("/path/report.html", "html", "Report")
         modal.dismiss = Mock()
 
-        event_ok = Mock()
-        event_ok.button.id = "fs-ok"
-        modal.on_button_pressed(event_ok)
+        event_open = Mock()
+        event_open.button.id = "fs-open"
+        modal.on_button_pressed(event_open)
 
         mock_popen.assert_called_once()
         self.assertEqual(mock_popen.call_args[0][0], ["xdg-open", "/path/report.html"])
         modal.dismiss.assert_called_once_with(None)
 
     @patch("subprocess.Popen")
-    def test_file_saved_modal_cancel(self, mock_popen):
+    def test_file_saved_modal_close_dialog(self, mock_popen):
         modal = FileSavedModal("/path/report.html", "html", "Report")
         modal.dismiss = Mock()
 
-        event_cancel = Mock()
-        event_cancel.button.id = "fs-cancel"
-        modal.on_button_pressed(event_cancel)
+        event_close = Mock()
+        event_close.button.id = "fs-close"
+        modal.on_button_pressed(event_close)
 
         mock_popen.assert_not_called()
         modal.dismiss.assert_called_once_with(None)
+
+    def test_file_saved_modal_button_labels(self):
+        import asyncio
+
+        from textual.app import App
+        from textual.widgets import Button
+
+        class _TestApp(App):
+            pass
+
+        async def _check():
+            app = _TestApp()
+            async with app.run_test() as pilot:
+                modal = FileSavedModal("/path/report.html", "html", "Report")
+                app.push_screen(modal)
+                await pilot.pause()
+                close_btn = modal.query_one("#fs-close", Button)
+                open_btn = modal.query_one("#fs-open", Button)
+                self.assertEqual(str(close_btn.label), "Close Dialog")
+                self.assertEqual(str(open_btn.label), "Open Report")
+
+        asyncio.run(_check())
 
 
 class TestDatePickerModal(unittest.TestCase):

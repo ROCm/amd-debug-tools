@@ -13,6 +13,15 @@ from jinja2 import Environment, FileSystemLoader
 from markupsafe import Markup
 import pandas as pd
 
+# Set matplotlib backend to non-interactive Agg to avoid requiring $DISPLAY
+os.environ.setdefault("MPLBACKEND", "Agg")
+try:
+    import matplotlib
+
+    matplotlib.use("Agg")
+except ImportError:
+    pass
+
 from amd_debug.database import SleepDatabase
 from amd_debug.power_rails import energy_to_joules
 from amd_debug.common import (
@@ -546,6 +555,9 @@ class SleepReport(AmdTool):
 
     def build_battery_chart(self):
         """Build a battery chart using matplotlib and seaborn"""
+        import matplotlib  # pylint: disable=import-outside-toplevel
+
+        matplotlib.use("Agg")
         import matplotlib.pyplot as plt  # pylint: disable=import-outside-toplevel
         import seaborn as sns  # pylint: disable=import-outside-toplevel
         import io  # pylint: disable=import-outside-toplevel
@@ -583,11 +595,15 @@ class SleepReport(AmdTool):
         )
         battery_svg = io.BytesIO()
         plt.savefig(battery_svg, format="svg")
+        plt.close(_fig)
         battery_svg.seek(0)
         self.battery_svg = battery_svg.read().decode("utf-8")
 
     def build_hw_sleep_chart(self):
         """Build the hardware sleep chart using matplotlib and seaborn"""
+        import matplotlib  # pylint: disable=import-outside-toplevel
+
+        matplotlib.use("Agg")
         import matplotlib.pyplot as plt  # pylint: disable=import-outside-toplevel
         import seaborn as sns  # pylint: disable=import-outside-toplevel
         import io  # pylint: disable=import-outside-toplevel
@@ -624,6 +640,7 @@ class SleepReport(AmdTool):
         )
         hwsleep_svg = io.BytesIO()
         plt.savefig(hwsleep_svg, format="svg")
+        plt.close(_fig)
         hwsleep_svg.seek(0)
         self.hwsleep_svg = hwsleep_svg.read().decode("utf-8")
 

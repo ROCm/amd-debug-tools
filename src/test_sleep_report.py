@@ -195,6 +195,18 @@ class TestSleepReport(unittest.TestCase):
         self.assertIsNotNone(self.report.hwsleep_svg)
         mock_savefig.assert_called_once()
 
+    @patch("matplotlib.pyplot.savefig")
+    def test_build_charts_without_display(self, mock_savefig):
+        """Charts can be built when DISPLAY environment variable is missing."""
+        import matplotlib
+
+        with patch.dict("os.environ", {}, clear=True):
+            self.report.build_battery_chart()
+            self.report.build_hw_sleep_chart()
+            self.assertIsNotNone(self.report.battery_svg)
+            self.assertIsNotNone(self.report.hwsleep_svg)
+            self.assertEqual(matplotlib.get_backend().lower(), "agg")
+
     def test_pre_process_dataframe_zero_duration(self):
         """Test the pre_process_dataframe method when t0 and t1 are the same."""
         # Mock the dataframe with t0 and t1 being the same

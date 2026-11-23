@@ -303,7 +303,7 @@ class TestMainFunction(unittest.TestCase):
             mock_relaunch_sudo.assert_not_called()
             mock_run_tui.assert_called_once_with(args)
 
-    @patch("amd_debug.tui.S2idleApp")
+    @patch("amd_debug.s2idle_tui.S2idleApp")
     def test_run_tui_function(self, mock_app_cls):
         """Test run_tui helper function instantiates and runs S2idleApp"""
         from amd_debug.s2idle import run_tui

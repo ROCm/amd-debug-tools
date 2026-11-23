@@ -16,10 +16,13 @@ from amd_debug.tui import (
     DatePickerModal,
     FileSavedModal,
     LogStream,
-    S2idleApp,
-    WelcomeScreen,
+    capture_output_to_log,
     build_elevated_cmd,
     get_elevation_env_vars,
+)
+from amd_debug.s2idle_tui import (
+    WelcomeScreen,
+    S2idleApp,
     get_s2idle_cmd,
 )
 
@@ -352,7 +355,7 @@ class TestS2idleApp(unittest.TestCase):
 
         asyncio.run(_run())
 
-    @patch("amd_debug.tui.is_root", return_value=True)
+    @patch("amd_debug.s2idle_tui.is_root", return_value=True)
     def test_on_mount_root(self, _mock_root):
         self.app.refresh_triage_status = Mock()
         self.app.log_message = Mock()
@@ -362,7 +365,7 @@ class TestS2idleApp(unittest.TestCase):
         self.app.refresh_triage_status.assert_called_once()
         self.app.log_message.assert_called()
 
-    @patch("amd_debug.tui.is_root", return_value=False)
+    @patch("amd_debug.s2idle_tui.is_root", return_value=False)
     def test_on_mount_non_root(self, _mock_root):
         self.app.refresh_triage_status = Mock()
         self.app.log_message = Mock()
@@ -384,7 +387,7 @@ class TestS2idleApp(unittest.TestCase):
         self.app.set_status("Running something")
         mock_status.update.assert_called_once_with("Status: Running something")
 
-    @patch("amd_debug.tui.SleepDatabase")
+    @patch("amd_debug.s2idle_tui.SleepDatabase")
     def test_refresh_triage_status_active(self, mock_db_cls):
         mock_db = mock_db_cls.return_value
         mock_db.triage_get.return_value = {
@@ -419,7 +422,7 @@ class TestS2idleApp(unittest.TestCase):
         self.assertTrue(mock_abandon.visible)
         self.assertTrue(mock_export.display)
 
-    @patch("amd_debug.tui.SleepDatabase")
+    @patch("amd_debug.s2idle_tui.SleepDatabase")
     def test_refresh_triage_status_none(self, mock_db_cls):
         mock_db = mock_db_cls.return_value
         mock_db.triage_get.return_value = None
@@ -492,7 +495,7 @@ class TestS2idleApp(unittest.TestCase):
         self.assertIn("Invalid date", self.app.log_message.call_args[0][0])
 
     @patch("subprocess.run")
-    @patch("amd_debug.tui.is_root", return_value=False)
+    @patch("amd_debug.s2idle_tui.is_root", return_value=False)
     def test_dispatch_test(self, _mock_root, mock_subproc):
         self.app.default_elevation = "sudo"
         self.app.log_message = Mock()
@@ -519,7 +522,7 @@ class TestS2idleApp(unittest.TestCase):
         self.assertIn("AMD_S2IDLE_TUI=1", mock_subproc.call_args[0][0])
         self.assertTrue(mock_subproc.call_args.kwargs.get("capture_output"))
 
-    @patch("amd_debug.tui.is_root", return_value=False)
+    @patch("amd_debug.s2idle_tui.is_root", return_value=False)
     @patch("subprocess.run")
     def test_dispatch_test_pkexec(self, mock_subproc, _mock_root):
         self.app.default_elevation = "pkexec"
@@ -550,11 +553,11 @@ class TestS2idleApp(unittest.TestCase):
         self.assertIn("AMD_S2IDLE_TUI=1", mock_subproc.call_args[0][0])
         self.assertTrue(mock_subproc.call_args.kwargs.get("capture_output"))
 
-    @patch("amd_debug.tui.is_root", return_value=True)
-    @patch("amd_debug.tui.Installer")
-    @patch("amd_debug.tui.get_validator")
-    @patch("amd_debug.tui.SleepValidator")
-    @patch("amd_debug.tui.SleepReport")
+    @patch("amd_debug.s2idle_tui.is_root", return_value=True)
+    @patch("amd_debug.s2idle_tui.Installer")
+    @patch("amd_debug.s2idle_tui.get_validator")
+    @patch("amd_debug.s2idle_tui.SleepValidator")
+    @patch("amd_debug.s2idle_tui.SleepReport")
     def test_worker_test_as_root(
         self,
         mock_sleep_report,
@@ -590,7 +593,7 @@ class TestS2idleApp(unittest.TestCase):
         mock_sleep_validator.return_value.run.assert_called_once()
         mock_sleep_report.return_value.run.assert_called_once()
 
-    @patch("amd_debug.tui.SleepReport")
+    @patch("amd_debug.s2idle_tui.SleepReport")
     def test_worker_report(self, mock_sleep_report):
         self.app.query_one = Mock(return_value=Mock())
         self.app.call_from_thread = Mock(
@@ -615,8 +618,8 @@ class TestS2idleApp(unittest.TestCase):
             "report.txt", "txt", "Report"
         )
 
-    @patch("amd_debug.tui.os.path.lexists", return_value=False)
-    @patch("amd_debug.tui.is_root", return_value=False)
+    @patch("amd_debug.s2idle_tui.os.path.lexists", return_value=False)
+    @patch("amd_debug.s2idle_tui.is_root", return_value=False)
     @patch("subprocess.run")
     def test_handle_run_triage_elevated(self, mock_subproc, _mock_root, _mock_lexists):
         mock_select = Mock()
@@ -651,8 +654,8 @@ class TestS2idleApp(unittest.TestCase):
         self.assertEqual(mock_subproc.call_args_list[0][0][0][0], "pkexec")
         self.assertTrue(mock_subproc.call_args_list[0].kwargs.get("capture_output"))
 
-    @patch("amd_debug.tui.SleepDatabase")
-    @patch("amd_debug.tui.is_root", return_value=False)
+    @patch("amd_debug.s2idle_tui.SleepDatabase")
+    @patch("amd_debug.s2idle_tui.is_root", return_value=False)
     @patch("subprocess.run")
     def test_handle_run_triage_completed_shows_modal(
         self, mock_subproc, _mock_root, mock_db_cls
@@ -711,8 +714,8 @@ class TestS2idleApp(unittest.TestCase):
             "/path/to/triage-report.html", "html", "Triage"
         )
 
-    @patch("amd_debug.tui.os.path.lexists", return_value=False)
-    @patch("amd_debug.tui.is_root", return_value=False)
+    @patch("amd_debug.s2idle_tui.os.path.lexists", return_value=False)
+    @patch("amd_debug.s2idle_tui.is_root", return_value=False)
     @patch("subprocess.run")
     def test_handle_run_triage_elevated_sudo(
         self, mock_subproc, _mock_root, _mock_lexists
@@ -759,7 +762,7 @@ class TestS2idleApp(unittest.TestCase):
         self.app._log_subprocess_output(mock_res)
         self.assertEqual(mock_log.write.call_count, 3)
 
-    @patch("amd_debug.tui.Triage")
+    @patch("amd_debug.s2idle_tui.Triage")
     def test_worker_triage(self, mock_triage_cls):
         mock_triage = mock_triage_cls.return_value
         mock_triage.report_path = "triage-report.txt"
@@ -779,7 +782,7 @@ class TestS2idleApp(unittest.TestCase):
             "triage-report.txt", "txt", "Triage"
         )
 
-    @patch("amd_debug.tui.Triage")
+    @patch("amd_debug.s2idle_tui.Triage")
     def test_worker_triage_change_pending(self, mock_triage_cls):
         mock_triage = mock_triage_cls.return_value
         mock_triage.report_path = None
@@ -803,8 +806,8 @@ class TestS2idleApp(unittest.TestCase):
         self.app.show_error_modal.assert_called_once()
         self.assertIn("Action Required", self.app.show_error_modal.call_args[0][0])
 
-    @patch("amd_debug.tui.os.path.exists", return_value=True)
-    @patch("amd_debug.tui.os.unlink")
+    @patch("amd_debug.s2idle_tui.os.path.exists", return_value=True)
+    @patch("amd_debug.s2idle_tui.os.unlink")
     def test_handle_run_test_overwrite_removes_file(self, mock_unlink, _mock_exists):
         mock_input = Mock(value="1")
         mock_select = Mock(value="txt")

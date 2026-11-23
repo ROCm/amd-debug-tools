@@ -502,7 +502,9 @@ def build_parser() -> argparse.ArgumentParser:
 
 def run_tui(args) -> bool:
     """Launch the Textual TUI"""
-    from amd_debug.tui import S2idleApp  # pylint: disable=import-outside-toplevel
+    from amd_debug.s2idle_tui import (  # pylint: disable=import-outside-toplevel
+        S2idleApp,
+    )
 
     app = S2idleApp(
         tool_debug=getattr(args, "tool_debug", False),

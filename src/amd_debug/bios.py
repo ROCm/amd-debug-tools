@@ -75,11 +75,21 @@ class AmdBios(AmdTool):
 
 
 def parse_args():
-    """Parse command line arguments"""
+    """Parse command line arguments
+
+    Without any arguments the tool starts the TUI.
+    """
     parser = argparse.ArgumentParser(
         description="Parse a combined kernel/BIOS log.",
+        epilog="Without any command the TUI is started, which provides a "
+        "graphical front-end for BIOS AML tracing and log parsing.\n"
+        "The 'trace' command enables or disables BIOS AML debug logging.\n"
+        "The 'parse' command parses a kernel log that contains BIOS logs.\n"
+        "To use non-interactively, please populate all optional arguments.",
     )
-    subparsers = parser.add_subparsers(help="Possible commands", dest="command")
+    subparsers = parser.add_subparsers(
+        help="Possible commands (default: tui)", dest="command"
+    )
     parse_cmd = subparsers.add_parser(
         "parse", help="Parse log for kernel and BIOS messages"
     )
@@ -108,15 +118,28 @@ def parse_args():
         action="store_true",
         help="Enable tool debug logging",
     )
+
+    # 'tui' command
+    tui_cmd = subparsers.add_parser(
+        "tui", help="Launch interactive Textual TUI (default)"
+    )
+    tui_cmd.add_argument(
+        "--tool-debug",
+        action="store_true",
+        help="Enable tool debug logging",
+    )
+
     parser.add_argument(
         "--version", action="store_true", help="Show version information"
     )
 
     if len(sys.argv) == 1:
-        parser.print_help(sys.stderr)
-        sys.exit(1)
+        args = parser.parse_args(["tui"])
+        return args
 
     args = parser.parse_args()
+    if args.command is None and not args.version:
+        args.command = "tui"
 
     if args.command == "trace":
         if args.enable and args.disable:
@@ -125,6 +148,17 @@ def parse_args():
             sys.exit("must set either enable or disable")
 
     return args
+
+
+def run_tui(args) -> bool:
+    """Launch the Textual TUI"""
+    from amd_debug.bios_tui import BiosApp  # pylint: disable=import-outside-toplevel
+
+    app = BiosApp(
+        tool_debug=getattr(args, "tool_debug", False),
+    )
+    app.run()
+    return True
 
 
 def main() -> None | int:
@@ -137,6 +171,8 @@ def main() -> None | int:
     elif args.command == "parse":
         app = AmdBios(args.input, args.tool_debug)
         ret = app.run()
+    elif args.command == "tui":
+        ret = run_tui(args)
     elif args.version:
         print(version())
     show_log_info()

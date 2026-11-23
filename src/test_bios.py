@@ -164,14 +164,20 @@ class TestAmdBios(unittest.TestCase):
         self.assertTrue(args.version)
 
     @patch("sys.argv", ["bios.py"])
-    @patch("argparse.ArgumentParser.print_help")
-    @patch("sys.exit")
-    def test_parse_args_no_arguments(self, mock_exit, mock_print_help):
-        """Test parse_args with no arguments"""
+    def test_parse_args_no_arguments(self):
+        """Test parse_args with no arguments defaults to the TUI"""
 
-        parse_args()
-        mock_print_help.assert_called_once()
-        mock_exit.assert_called_once_with(1)
+        args = parse_args()
+        self.assertEqual(args.command, "tui")
+        self.assertFalse(args.tool_debug)
+
+    @patch("sys.argv", ["bios.py", "tui", "--tool-debug"])
+    def test_parse_args_tui_command(self):
+        """Test parse_args with tui command"""
+
+        args = parse_args()
+        self.assertEqual(args.command, "tui")
+        self.assertTrue(args.tool_debug)
 
     @patch("sys.argv", ["bios.py", "trace", "--enable", "--disable"])
     @patch("sys.exit")

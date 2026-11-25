@@ -52,8 +52,8 @@ jobs:
       - name: Set version from git describe
         run: |
           git config --global --add safe.directory "$PWD"
-          # e.g. v0.2.22-35-gd87a729 -> 0.2.22-35-gd87a729-0
-          desc=$(git describe --tags | sed 's/^v//') \
+          # e.g. 0.2.22-35-gd87a729-0
+          desc=$(git describe --tags -a) \
             || desc=$(dpkg-parsechangelog -S Version | sed 's/-[^-]*$//')
           export DEBFULLNAME="CI" DEBEMAIL="ci@localhost"
           dch --force-bad-version --newversion "${desc}-0" \

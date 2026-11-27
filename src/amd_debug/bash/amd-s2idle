@@ -8,10 +8,6 @@ _cmd_list=(
 	'version'
 )
 
-_general_opts=(
-	'--pkexec'
-)
-
 _tui_opts=(
 	'--tool-debug'
 )

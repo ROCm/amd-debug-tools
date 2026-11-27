@@ -64,6 +64,7 @@ from amd_debug.tui import (
     FileSavedModal,
     build_elevated_cmd,
     capture_output_to_log,
+    default_elevation_tool,
     run_elevated_cmd,
 )
 from amd_debug.validator import SleepValidator
@@ -308,10 +309,7 @@ class S2idleApp(App):
         self.tool_debug = tool_debug
         self.app_name = app_name or tool_name()
         self.title = self.app_name
-        if shutil.which("pkexec") and not running_ssh():
-            self.default_elevation = "pkexec"
-        else:
-            self.default_elevation = "sudo"
+        self.default_elevation = default_elevation_tool()
         self._is_busy = False
 
     def on_mount(self) -> None:
@@ -859,13 +857,19 @@ class S2idleApp(App):
             if bios_debug:
                 base_cmd += ["--bios-debug"]
 
+            extra_env = ["AMD_S2IDLE_TUI=1"]
             full_cmd = build_elevated_cmd(
                 base_cmd,
                 tool=self.default_elevation,
-                extra_env=["AMD_S2IDLE_TUI=1"],
+                extra_env=extra_env,
+            )
+            fallback_cmd = (
+                build_elevated_cmd(base_cmd, tool="sudo", extra_env=extra_env)
+                if self.default_elevation == "pkexec" and shutil.which("sudo")
+                else None
             )
             with self.suspend():
-                result = run_elevated_cmd(full_cmd)
+                result = run_elevated_cmd(full_cmd, fallback_cmd=fallback_cmd)
                 ret = result.returncode
             self._ensure_log_shown()
             self._log_subprocess_output(result)
@@ -1132,8 +1136,13 @@ class S2idleApp(App):
                 tool=self.default_elevation,
                 extra_env=extra_env,
             )
+            fallback_cmd = (
+                build_elevated_cmd(base_cmd, tool="sudo", extra_env=extra_env)
+                if self.default_elevation == "pkexec" and shutil.which("sudo")
+                else None
+            )
             with self.suspend():
-                result = run_elevated_cmd(full_cmd)
+                result = run_elevated_cmd(full_cmd, fallback_cmd=fallback_cmd)
                 ret = result.returncode
             self._ensure_log_shown()
             self._log_subprocess_output(result)

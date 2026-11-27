@@ -24,6 +24,7 @@ from amd_debug.tui import (
     FileSavedModal,
     LogStream,
     build_elevated_cmd,
+    default_elevation_tool,
     get_elevation_env_vars,
     run_elevated_cmd,
 )
@@ -124,6 +125,60 @@ class TestHelpers(unittest.TestCase):
 
         self.assertEqual(result.returncode, 42)
         self.assertIsNone(mock_popen.call_args.kwargs.get("stdin"))
+
+    def test_default_elevation_tool_requires_gui_and_local_session(self):
+        """default_elevation_tool uses pkexec only in a local graphical session"""
+        with patch("shutil.which", side_effect=lambda x: f"/usr/bin/{x}"), patch.dict(
+            os.environ, {"DISPLAY": ":0"}, clear=True
+        ):
+            self.assertEqual(default_elevation_tool(), "pkexec")
+
+        with patch("shutil.which", side_effect=lambda x: f"/usr/bin/{x}"), patch.dict(
+            os.environ, {}, clear=True
+        ):
+            self.assertEqual(default_elevation_tool(), "sudo")
+
+        with patch("shutil.which", side_effect=lambda x: f"/usr/bin/{x}"), patch.dict(
+            os.environ,
+            {"DISPLAY": ":0", "SSH_CONNECTION": "1.2.3.4 1 5.6.7.8 22"},
+            clear=True,
+        ):
+            self.assertEqual(default_elevation_tool(), "sudo")
+
+    def test_run_elevated_cmd_falls_back_to_sudo_on_no_session_for_cookie(self):
+        """run_elevated_cmd retries with fallback_cmd if pkexec has no polkit session"""
+        out_buf = io.StringIO()
+        err_buf = io.StringIO()
+        pkexec_cmd = ["pkexec", "dummy"]
+        fallback_cmd = [sys.executable, "-c", "print('sudo ok')"]
+
+        real_popen = __import__("subprocess").Popen
+
+        def fake_popen(cmd, **kwargs):
+            if cmd == pkexec_cmd:
+                return real_popen(
+                    [
+                        sys.executable,
+                        "-c",
+                        (
+                            "import sys; "
+                            "sys.stderr.write('No session for cookie\\n'); "
+                            "sys.exit(127)"
+                        ),
+                    ],
+                    **kwargs,
+                )
+            return real_popen(cmd, **kwargs)
+
+        with patch("sys.stdout", out_buf), patch("sys.stderr", err_buf), patch(
+            "subprocess.Popen", side_effect=fake_popen
+        ):
+            result = run_elevated_cmd(pkexec_cmd, fallback_cmd=fallback_cmd)
+
+        self.assertEqual(result.returncode, 0)
+        self.assertIn("sudo ok", result.stdout)
+        self.assertIn("No session for cookie", result.stderr)
+        self.assertIn("falling back to sudo", result.stderr)
 
 
 class TestLogStream(unittest.TestCase):

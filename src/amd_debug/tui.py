@@ -6,6 +6,7 @@ from __future__ import annotations
 import calendar
 import os
 import selectors
+import shutil
 import subprocess
 import sys
 from contextlib import contextmanager
@@ -25,6 +26,18 @@ from textual.widgets import (
     Select,
     Static,
 )
+
+from amd_debug.common import running_ssh
+
+
+def default_elevation_tool() -> str:
+    """Choose pkexec only in a local graphical session; otherwise prefer sudo"""
+    has_gui = bool(os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY"))
+    if shutil.which("pkexec") and not running_ssh() and has_gui:
+        return "pkexec"
+    if shutil.which("sudo"):
+        return "sudo"
+    return "pkexec"
 
 
 def get_elevation_env_vars() -> list[str]:
@@ -84,14 +97,18 @@ def _write_stream_bytes(target, data: bytes) -> None:
         target.flush()
 
 
-def run_elevated_cmd(cmd: list[str]) -> subprocess.CompletedProcess[str]:
+def run_elevated_cmd(
+    cmd: list[str], fallback_cmd: list[str] | None = None
+) -> subprocess.CompletedProcess[str]:
     """Run an elevated command with terminal input access while cloning output.
 
     Inherits stdin directly so interactive authentication agents (such as
     pkexec's text agent or sudo) and interactive subcommands can read from the
     controlling terminal.  stdout and stderr are streamed live to the terminal
     and simultaneously captured so callers can clone them into the TUI
-    execution log.
+    execution log.  If pkexec fails because polkit has no session for the
+    authentication cookie and a sudo fallback command is provided, retry with
+    the fallback command.
     """
     stdout_chunks: list[bytes] = []
     stderr_chunks: list[bytes] = []
@@ -138,11 +155,31 @@ def run_elevated_cmd(cmd: list[str]) -> subprocess.CompletedProcess[str]:
 
         returncode = proc.wait()
 
+    stdout_text = b"".join(stdout_chunks).decode("utf-8", errors="replace")
+    stderr_text = b"".join(stderr_chunks).decode("utf-8", errors="replace")
+
+    if (
+        fallback_cmd
+        and cmd
+        and cmd[0] == "pkexec"
+        and returncode == 127
+        and "No session for cookie" in stderr_text
+    ):
+        notice = "pkexec has no polkit session; falling back to sudo...\n"
+        _write_stream_bytes(sys.stderr, notice.encode("utf-8"))
+        fb_result = run_elevated_cmd(fallback_cmd)
+        return subprocess.CompletedProcess(
+            args=fallback_cmd,
+            returncode=fb_result.returncode,
+            stdout=stdout_text + fb_result.stdout,
+            stderr=stderr_text + notice + fb_result.stderr,
+        )
+
     return subprocess.CompletedProcess(
         args=cmd,
         returncode=returncode,
-        stdout=b"".join(stdout_chunks).decode("utf-8", errors="replace"),
-        stderr=b"".join(stderr_chunks).decode("utf-8", errors="replace"),
+        stdout=stdout_text,
+        stderr=stderr_text,
     )
 
 

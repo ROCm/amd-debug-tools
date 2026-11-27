@@ -442,20 +442,21 @@ def read_msr(msr, cpu):
     return val
 
 
-def relaunch_sudo(pkexec: bool = False, extra_args: list | None = None) -> None:
-    """Relaunch the script with sudo or pkexec if not already running as root
+def relaunch_sudo(extra_args: list | None = None) -> None:
+    """Relaunch the script with sudo if not already running as root
 
     extra_args are appended to the re-exec'd command line (e.g. ["--accepted"])
     so the elevated process can pick up state without mutating sys.argv.
     """
     if not is_root():
-        binary = "pkexec" if pkexec else "sudo"
-        logger.debug(f"Relaunching with {binary}")
+        logger.debug("Relaunching with sudo")
         argv = sys.argv + list(extra_args or [])
         env_vars = []
         vars_to_check = [
             "DISPLAY",
+            "WAYLAND_DISPLAY",
             "XAUTHORITY",
+            "XDG_RUNTIME_DIR",
             "DBUS_SESSION_BUS_ADDRESS",
             "XDG_SESSION_TYPE",
             "XDG_DATA_DIRS",
@@ -463,43 +464,24 @@ def relaunch_sudo(pkexec: bool = False, extra_args: list | None = None) -> None:
             "AMD_S2IDLE_DB",
             "KDE_SESSION_VERSION",
             "SSH_CLIENT",
+            "SSH_CONNECTION",
             "SSH_TTY",
         ]
-        if not pkexec:
-            vars_to_check.insert(1, "WAYLAND_DISPLAY")
-            vars_to_check.insert(3, "XDG_RUNTIME_DIR")
         for var in vars_to_check:
             value = os.environ.get(var)
             if value:
                 env_vars.append(f"{var}={value}")
 
-        if pkexec:
-            import pwd
-
-            uid = os.getuid()
-            gid = os.getgid()
-            try:
-                user = pwd.getpwuid(uid).pw_name
-            except (KeyError, ValueError, ImportError):
-                user = os.environ.get("USER", "")
-            if user:
-                env_vars.append(f"SUDO_USER={user}")
-            env_vars.append(f"SUDO_UID={uid}")
-            env_vars.append(f"SUDO_GID={gid}")
-
-            cmd = ["pkexec", "env"] + env_vars + argv
-            os.execvp("pkexec", cmd)
+        if env_vars:
+            sudo_cmd = (
+                ["sudo"]
+                + [f"--preserve-env={var.split('=')[0]}" for var in env_vars]
+                + argv
+            )
         else:
-            if env_vars:
-                sudo_cmd = (
-                    ["sudo"]
-                    + [f"--preserve-env={var.split('=')[0]}" for var in env_vars]
-                    + argv
-                )
-            else:
-                sudo_cmd = ["sudo"] + argv
+            sudo_cmd = ["sudo"] + argv
 
-            os.execvp("sudo", sudo_cmd)
+        os.execvp("sudo", sudo_cmd)
 
 
 def running_ssh():

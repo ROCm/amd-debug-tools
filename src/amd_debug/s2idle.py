@@ -489,11 +489,6 @@ def build_parser() -> argparse.ArgumentParser:
         )
 
     parser.add_argument(
-        "--pkexec",
-        action="store_true",
-        help="Use pkexec instead of sudo to elevate privileges",
-    )
-    parser.add_argument(
         "--version", action="store_true", help="Show version information"
     )
 
@@ -532,12 +527,11 @@ def main() -> None | int:
     """Main function"""
     args = parse_args()
     ret = False
-    pkexec = getattr(args, "pkexec", False)
     if args.action == "install":
-        relaunch_sudo(pkexec=pkexec)
+        relaunch_sudo()
         install(args.tool_debug)
     elif args.action == "uninstall":
-        relaunch_sudo(pkexec=pkexec)
+        relaunch_sudo()
         uninstall(args.tool_debug)
     elif args.action == "report":
         ret = report(
@@ -549,7 +543,7 @@ def main() -> None | int:
             args.report_debug,
         )
     elif args.action == "test":
-        relaunch_sudo(pkexec=pkexec)
+        relaunch_sudo()
         ret = run_test_cycle(
             args.duration,
             args.wait,
@@ -567,7 +561,7 @@ def main() -> None | int:
             # If the user just confirmed (not root, not pre-accepted), pass
             # --accepted so the re-exec'd elevated process doesn't ask again
             extra = [] if (is_root() or args.accepted) else ["--accepted"]
-            relaunch_sudo(pkexec=pkexec, extra_args=extra)
+            relaunch_sudo(extra_args=extra)
             ret = run_triage(args)
     elif args.action == "tui":
         ret = run_tui(args)

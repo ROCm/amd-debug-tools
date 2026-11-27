@@ -134,21 +134,6 @@ class TestParseArgs(unittest.TestCase):
         args = parse_args()
         self.assertEqual(args.action, "tui")
         self.assertTrue(args.tool_debug)
-        self.assertFalse(args.pkexec)
-
-    def test_top_level_pkexec(self):
-        """Test parse_args with top-level --pkexec flag"""
-        sys.argv = ["s2idle.py", "--pkexec", "tui"]
-        args = parse_args()
-        self.assertEqual(args.action, "tui")
-        self.assertTrue(args.pkexec)
-
-    def test_top_level_pkexec_defaults_to_tui(self):
-        """Test parse_args with top-level --pkexec flag without command defaults to tui"""
-        sys.argv = ["s2idle.py", "--pkexec"]
-        args = parse_args()
-        self.assertEqual(args.action, "tui")
-        self.assertTrue(args.pkexec)
 
     def test_help_text_reflects_tui_default(self):
         """Test parser help text explicitly reflects tui as default"""
@@ -253,15 +238,13 @@ class TestMainFunction(unittest.TestCase):
     def test_main_triage(self, mock_triage, mock_relaunch_sudo, _mock_root):
         """Test main function with triage action passes --accepted to the relaunch"""
         sys.argv = ["s2idle.py", "triage"]
-        args = argparse.Namespace(action="triage", accepted=False, pkexec=False)
+        args = argparse.Namespace(action="triage", accepted=False)
         with patch("amd_debug.s2idle.parse_args", return_value=args), patch(
             "amd_debug.s2idle.confirm_triage", return_value=True
         ):
             mock_triage.return_value = True
             self.assertIsNone(main())
-            mock_relaunch_sudo.assert_called_once_with(
-                pkexec=False, extra_args=["--accepted"]
-            )
+            mock_relaunch_sudo.assert_called_once_with(extra_args=["--accepted"])
             mock_triage.assert_called_once_with(args)
 
     @patch("amd_debug.s2idle.is_root", return_value=False)
@@ -272,13 +255,13 @@ class TestMainFunction(unittest.TestCase):
     ):
         """A pre-accepted triage doesn't pass --accepted again"""
         sys.argv = ["s2idle.py", "triage", "--accepted"]
-        args = argparse.Namespace(action="triage", accepted=True, pkexec=False)
+        args = argparse.Namespace(action="triage", accepted=True)
         with patch("amd_debug.s2idle.parse_args", return_value=args), patch(
             "amd_debug.s2idle.confirm_triage", return_value=True
         ):
             mock_triage.return_value = True
             self.assertIsNone(main())
-            mock_relaunch_sudo.assert_called_once_with(pkexec=False, extra_args=[])
+            mock_relaunch_sudo.assert_called_once_with(extra_args=[])
             mock_triage.assert_called_once_with(args)
 
     @patch("amd_debug.s2idle.relaunch_sudo")
@@ -297,7 +280,7 @@ class TestMainFunction(unittest.TestCase):
     @patch("amd_debug.s2idle.run_tui", return_value=True)
     def test_main_tui(self, mock_run_tui, mock_relaunch_sudo):
         """Test main function with tui action does not relaunch with sudo up front"""
-        args = argparse.Namespace(action="tui", pkexec=False, tool_debug=False)
+        args = argparse.Namespace(action="tui", tool_debug=False)
         with patch("amd_debug.s2idle.parse_args", return_value=args):
             self.assertIsNone(main())
             mock_relaunch_sudo.assert_not_called()

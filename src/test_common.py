@@ -611,7 +611,7 @@ class TestCommon(unittest.TestCase):
     def test_relaunch_sudo_default(self, mock_execvp, _mock_root):
         """Test relaunch_sudo relaunches with sudo by default"""
         sys.argv = ["s2idle.py", "test"]
-        relaunch_sudo(pkexec=False)
+        relaunch_sudo()
         mock_execvp.assert_called_once_with(
             "sudo", ["sudo", "--preserve-env=DISPLAY", "s2idle.py", "test"]
         )
@@ -629,56 +629,15 @@ class TestCommon(unittest.TestCase):
     def test_relaunch_sudo_preserves_db_env(self, mock_execvp, _mock_root):
         """Test relaunch_sudo preserves XDG_DATA_HOME and AMD_S2IDLE_DB"""
         sys.argv = ["s2idle.py", "test"]
-        relaunch_sudo(pkexec=False)
+        relaunch_sudo()
         mock_execvp.assert_called_once()
         cmd = mock_execvp.call_args[0][1]
         self.assertIn("--preserve-env=XDG_DATA_HOME", cmd)
         self.assertIn("--preserve-env=AMD_S2IDLE_DB", cmd)
-
-    @patch("amd_debug.common.is_root", return_value=False)
-    @patch("os.execvp")
-    @patch("os.getuid", return_value=1000)
-    @patch("os.getgid", return_value=1000)
-    @patch("pwd.getpwuid")
-    @patch.dict(
-        os.environ,
-        {
-            "DISPLAY": ":0",
-            "WAYLAND_DISPLAY": "wayland-0",
-            "XDG_RUNTIME_DIR": "/run/user/1000",
-        },
-        clear=True,
-    )
-    def test_relaunch_sudo_pkexec(
-        self, mock_getpwuid, _mock_gid, _mock_uid, mock_execvp, _mock_root
-    ):
-        """Test relaunch_sudo relaunches with pkexec when pkexec=True and omits WAYLAND_DISPLAY and XDG_RUNTIME_DIR"""
-        mock_pw = Mock()
-        mock_pw.pw_name = "testuser"
-        mock_getpwuid.return_value = mock_pw
-
-        sys.argv = ["s2idle.py", "tui", "--pkexec"]
-        relaunch_sudo(pkexec=True)
-        mock_execvp.assert_called_once()
-        args = mock_execvp.call_args[0]
-        self.assertEqual(args[0], "pkexec")
-        cmd = args[1]
-        self.assertEqual(cmd[0], "pkexec")
-        self.assertEqual(cmd[1], "env")
-        self.assertIn("DISPLAY=:0", cmd)
-        self.assertNotIn("WAYLAND_DISPLAY=wayland-0", cmd)
-        self.assertNotIn("XDG_RUNTIME_DIR=/run/user/1000", cmd)
-        self.assertIn("SUDO_USER=testuser", cmd)
-        self.assertIn("SUDO_UID=1000", cmd)
-        self.assertIn("SUDO_GID=1000", cmd)
-        self.assertIn("s2idle.py", cmd)
-        self.assertIn("tui", cmd)
-        self.assertIn("--pkexec", cmd)
 
     @patch("amd_debug.common.is_root", return_value=True)
     @patch("os.execvp")
     def test_relaunch_sudo_when_already_root(self, mock_execvp, _mock_root):
         """Test relaunch_sudo does nothing if already running as root"""
         relaunch_sudo()
-        relaunch_sudo(pkexec=True)
         mock_execvp.assert_not_called()

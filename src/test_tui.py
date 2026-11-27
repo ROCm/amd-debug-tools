@@ -4,11 +4,18 @@
 Unit tests for the Textual TUI in amd-debug-tools.
 """
 
+import io
 import os
+import sys
 import unittest
 from datetime import datetime
 from unittest.mock import Mock, patch
 
+from amd_debug.s2idle_tui import (
+    S2idleApp,
+    WelcomeScreen,
+    get_s2idle_cmd,
+)
 from amd_debug.triage import Stage, Status
 from amd_debug.tui import (
     AskQuestionModal,
@@ -16,14 +23,9 @@ from amd_debug.tui import (
     DatePickerModal,
     FileSavedModal,
     LogStream,
-    capture_output_to_log,
     build_elevated_cmd,
     get_elevation_env_vars,
-)
-from amd_debug.s2idle_tui import (
-    WelcomeScreen,
-    S2idleApp,
-    get_s2idle_cmd,
+    run_elevated_cmd,
 )
 
 
@@ -84,7 +86,44 @@ class TestHelpers(unittest.TestCase):
         self.assertIn("SUDO_USER=testuser", cmd)
         self.assertIn("SUDO_UID=1000", cmd)
         self.assertIn("SUDO_GID=1000", cmd)
+        self.assertIn("PYTHONUNBUFFERED=1", cmd)
         self.assertEqual(cmd[-2:], ["test_cmd", "arg1"])
+
+    def test_run_elevated_cmd_tees_and_captures_output(self):
+        """run_elevated_cmd streams stdout/stderr live and clones them to result"""
+        out_buf = io.StringIO()
+        err_buf = io.StringIO()
+        cmd = [
+            sys.executable,
+            "-c",
+            (
+                "import sys; "
+                "sys.stdout.write('prompt: '); sys.stdout.flush(); "
+                "sys.stdout.write('hello\\n'); "
+                "sys.stderr.write('warn\\n')"
+            ),
+        ]
+        with patch("sys.stdout", out_buf), patch("sys.stderr", err_buf):
+            result = run_elevated_cmd(cmd)
+
+        self.assertEqual(result.returncode, 0)
+        self.assertEqual(result.stdout, "prompt: hello\n")
+        self.assertEqual(result.stderr, "warn\n")
+        self.assertEqual(out_buf.getvalue(), "prompt: hello\n")
+        self.assertEqual(err_buf.getvalue(), "warn\n")
+
+    def test_run_elevated_cmd_inherits_stdin_and_exit_code(self):
+        """run_elevated_cmd passes stdin=None for terminal access and preserves exit code"""
+        out_buf = io.StringIO()
+        err_buf = io.StringIO()
+        cmd = [sys.executable, "-c", "import sys; sys.exit(42)"]
+        with patch("sys.stdout", out_buf), patch("sys.stderr", err_buf), patch(
+            "subprocess.Popen", wraps=__import__("subprocess").Popen
+        ) as mock_popen:
+            result = run_elevated_cmd(cmd)
+
+        self.assertEqual(result.returncode, 42)
+        self.assertIsNone(mock_popen.call_args.kwargs.get("stdin"))
 
 
 class TestLogStream(unittest.TestCase):
@@ -494,7 +533,7 @@ class TestS2idleApp(unittest.TestCase):
         self.app.log_message.assert_called_once()
         self.assertIn("Invalid date", self.app.log_message.call_args[0][0])
 
-    @patch("subprocess.run")
+    @patch("amd_debug.s2idle_tui.run_elevated_cmd")
     @patch("amd_debug.s2idle_tui.is_root", return_value=False)
     def test_dispatch_test(self, _mock_root, mock_subproc):
         self.app.default_elevation = "sudo"
@@ -516,14 +555,14 @@ class TestS2idleApp(unittest.TestCase):
             bios_debug=False,
         )
 
-        # Should run sudo directly on main thread
+        # Should suspend TUI and run sudo directly on main thread
+        self.app.suspend.assert_called_once()
         mock_subproc.assert_called_once()
         self.assertEqual(mock_subproc.call_args[0][0][0], "sudo")
         self.assertIn("AMD_S2IDLE_TUI=1", mock_subproc.call_args[0][0])
-        self.assertTrue(mock_subproc.call_args.kwargs.get("capture_output"))
 
     @patch("amd_debug.s2idle_tui.is_root", return_value=False)
-    @patch("subprocess.run")
+    @patch("amd_debug.s2idle_tui.run_elevated_cmd")
     def test_dispatch_test_pkexec(self, mock_subproc, _mock_root):
         self.app.default_elevation = "pkexec"
         mock_result = Mock()
@@ -548,10 +587,10 @@ class TestS2idleApp(unittest.TestCase):
             bios_debug=False,
         )
 
+        self.app.suspend.assert_called_once()
         mock_subproc.assert_called_once()
         self.assertEqual(mock_subproc.call_args[0][0][0], "pkexec")
         self.assertIn("AMD_S2IDLE_TUI=1", mock_subproc.call_args[0][0])
-        self.assertTrue(mock_subproc.call_args.kwargs.get("capture_output"))
 
     @patch("amd_debug.s2idle_tui.is_root", return_value=True)
     @patch("amd_debug.s2idle_tui.Installer")
@@ -620,7 +659,7 @@ class TestS2idleApp(unittest.TestCase):
 
     @patch("amd_debug.s2idle_tui.os.path.lexists", return_value=False)
     @patch("amd_debug.s2idle_tui.is_root", return_value=False)
-    @patch("subprocess.run")
+    @patch("amd_debug.s2idle_tui.run_elevated_cmd")
     def test_handle_run_triage_elevated(self, mock_subproc, _mock_root, _mock_lexists):
         mock_select = Mock()
         mock_select.value = "html"
@@ -651,12 +690,12 @@ class TestS2idleApp(unittest.TestCase):
 
         self.app.default_elevation = "pkexec"
         self.app.handle_run_triage()
+        self.app.suspend.assert_called_once()
         self.assertEqual(mock_subproc.call_args_list[0][0][0][0], "pkexec")
-        self.assertTrue(mock_subproc.call_args_list[0].kwargs.get("capture_output"))
 
     @patch("amd_debug.s2idle_tui.SleepDatabase")
     @patch("amd_debug.s2idle_tui.is_root", return_value=False)
-    @patch("subprocess.run")
+    @patch("amd_debug.s2idle_tui.run_elevated_cmd")
     def test_handle_run_triage_completed_shows_modal(
         self, mock_subproc, _mock_root, mock_db_cls
     ):
@@ -716,7 +755,7 @@ class TestS2idleApp(unittest.TestCase):
 
     @patch("amd_debug.s2idle_tui.os.path.lexists", return_value=False)
     @patch("amd_debug.s2idle_tui.is_root", return_value=False)
-    @patch("subprocess.run")
+    @patch("amd_debug.s2idle_tui.run_elevated_cmd")
     def test_handle_run_triage_elevated_sudo(
         self, mock_subproc, _mock_root, _mock_lexists
     ):
@@ -749,8 +788,8 @@ class TestS2idleApp(unittest.TestCase):
         self.app.log_message = Mock()
 
         self.app.handle_run_triage()
+        self.app.suspend.assert_called_once()
         self.assertEqual(mock_subproc.call_args_list[0][0][0][0], "sudo")
-        self.assertTrue(mock_subproc.call_args_list[0].kwargs.get("capture_output"))
 
     def test_log_subprocess_output(self):
         mock_log = Mock()

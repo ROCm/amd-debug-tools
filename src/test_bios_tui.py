@@ -5,7 +5,6 @@
 Unit tests for the amd-bios Textual TUI.
 """
 
-import os
 import unittest
 from unittest.mock import Mock, patch
 
@@ -55,6 +54,7 @@ class TestBiosApp(unittest.TestCase):
     def test_default_tab_is_trace(self):
         """Verify that the TUI defaults to the trace tab"""
         import asyncio
+
         from textual.widgets import TabbedContent
 
         async def _run():
@@ -207,7 +207,7 @@ class TestBiosApp(unittest.TestCase):
     # -- Trace command ----------------------------------------------------
 
     @patch("amd_debug.bios_tui.is_root", return_value=False)
-    @patch("subprocess.run")
+    @patch("amd_debug.bios_tui.run_elevated_cmd")
     def test_handle_run_trace_elevated_sudo(self, mock_subproc, _mock_root):
         self.app.default_elevation = "sudo"
         mock_select = Mock()
@@ -233,15 +233,15 @@ class TestBiosApp(unittest.TestCase):
 
         self.app.handle_run_trace()
 
+        self.app.suspend.assert_called_once()
         mock_subproc.assert_called_once()
         self.assertEqual(mock_subproc.call_args[0][0][0], "sudo")
         self.assertIn("AMD_BIOS_TUI=1", mock_subproc.call_args[0][0])
         self.assertIn("trace", mock_subproc.call_args[0][0])
         self.assertIn("--enable", mock_subproc.call_args[0][0])
-        self.assertTrue(mock_subproc.call_args.kwargs.get("capture_output"))
 
     @patch("amd_debug.bios_tui.is_root", return_value=False)
-    @patch("subprocess.run")
+    @patch("amd_debug.bios_tui.run_elevated_cmd")
     def test_handle_run_trace_elevated_pkexec(self, mock_subproc, _mock_root):
         self.app.default_elevation = "pkexec"
         mock_result = Mock()
@@ -271,6 +271,7 @@ class TestBiosApp(unittest.TestCase):
 
         self.app.handle_run_trace()
 
+        self.app.suspend.assert_called_once()
         mock_subproc.assert_called_once()
         self.assertEqual(mock_subproc.call_args[0][0][0], "pkexec")
         self.assertIn("AMD_BIOS_TUI=1", mock_subproc.call_args[0][0])
@@ -278,7 +279,7 @@ class TestBiosApp(unittest.TestCase):
         self.assertIn("--tool-debug", mock_subproc.call_args[0][0])
 
     @patch("amd_debug.bios_tui.is_root", return_value=False)
-    @patch("subprocess.run")
+    @patch("amd_debug.bios_tui.run_elevated_cmd")
     def test_handle_run_trace_elevated_failure(self, mock_subproc, _mock_root):
         self.app.default_elevation = "pkexec"
         mock_result = Mock()

@@ -366,6 +366,8 @@ class TestCommon(unittest.TestCase):
         """Test running_in_ssh function"""
         with patch("os.environ", {"SSH_TTY": "/dev/pts/0"}):
             self.assertTrue(running_ssh())
+        with patch("os.environ", {"SSH_CONNECTION": "1.2.3.4 1234 5.6.7.8 22"}):
+            self.assertTrue(running_ssh())
         with patch("os.environ", {}):
             self.assertFalse(running_ssh())
 

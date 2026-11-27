@@ -5,9 +5,9 @@ from __future__ import annotations
 
 import os
 import shutil
-import subprocess
 import sys
-from contextlib import nullcontext
+from contextlib import suppress
+from typing import ClassVar
 
 from rich.text import Text
 from textual.app import App, ComposeResult
@@ -36,6 +36,7 @@ from amd_debug.tui import (
     ErrorModal,
     build_elevated_cmd,
     capture_output_to_log,
+    run_elevated_cmd,
 )
 
 
@@ -111,7 +112,7 @@ class BiosWelcomeScreen(ModalScreen[str]):
 class BiosApp(App):
     TITLE = "amd-bios"
     SUB_TITLE = "BIOS AML Debug & Log Parser"
-    BINDINGS = [
+    BINDINGS: ClassVar[list[Binding]] = [
         Binding("q", "quit", "Quit"),
         Binding("c", "clear_log", "Clear Log"),
         Binding("t", "toggle_log", "Toggle Log"),
@@ -264,8 +265,8 @@ class BiosApp(App):
         self.log_message(f"[bold green]{self.app_name} TUI started.[/bold green]")
         if not is_root():
             self.log_message(
-                "[cyan]Running as unprivileged user. "
-                "pkexec is required for elevated operations (trace).[/cyan]"
+                f"[cyan]Running as unprivileged user. "
+                f"{self.default_elevation} is required for elevated operations (trace).[/cyan]"
             )
         else:
             self.log_message("[cyan]Running as root.[/cyan]")
@@ -284,7 +285,7 @@ class BiosApp(App):
         try:
             tabbed = self.query_one("#tab-content", TabbedContent)
             tabbed.active = tab_id
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             self.log_message(f"[red]Failed to switch tab: {e}[/red]")
 
     def compose(self) -> ComposeResult:
@@ -307,14 +308,15 @@ class BiosApp(App):
                             "Enable or disable BIOS AML tracing.",
                             classes="form-label",
                         )
-                    with Collapsible(title="Advanced", id="trace-advanced"):
-                        with Horizontal(classes="form-row-switch"):
-                            yield Label("Tool Debug:", classes="form-label")
-                            yield Switch(value=self.tool_debug, id="trace-tool-debug")
-                            yield Label(
-                                "Enable verbose tool debugging.",
-                                classes="form-label",
-                            )
+                    with Collapsible(title="Advanced", id="trace-advanced"), Horizontal(
+                        classes="form-row-switch"
+                    ):
+                        yield Label("Tool Debug:", classes="form-label")
+                        yield Switch(value=self.tool_debug, id="trace-tool-debug")
+                        yield Label(
+                            "Enable verbose tool debugging.",
+                            classes="form-label",
+                        )
                     with Horizontal(classes="action-button-row"):
                         yield Button(
                             "Run Trace",
@@ -331,14 +333,15 @@ class BiosApp(App):
                             classes="form-input",
                         )
                         yield Label("Kernel log file to parse.", classes="form-label")
-                    with Collapsible(title="Advanced", id="parse-advanced"):
-                        with Horizontal(classes="form-row-switch"):
-                            yield Label("Tool Debug:", classes="form-label")
-                            yield Switch(value=self.tool_debug, id="parse-tool-debug")
-                            yield Label(
-                                "Enable verbose tool debugging.",
-                                classes="form-label",
-                            )
+                    with Collapsible(title="Advanced", id="parse-advanced"), Horizontal(
+                        classes="form-row-switch"
+                    ):
+                        yield Label("Tool Debug:", classes="form-label")
+                        yield Switch(value=self.tool_debug, id="parse-tool-debug")
+                        yield Label(
+                            "Enable verbose tool debugging.",
+                            classes="form-label",
+                        )
                     with Horizontal(classes="action-button-row"):
                         yield Button(
                             "Parse Log",
@@ -360,7 +363,7 @@ class BiosApp(App):
         log_widget = self.query_one("#output-log", RichLog)
         try:
             rendered = Text.from_markup(message)
-        except Exception:
+        except Exception:  # noqa: BLE001
             rendered = Text(message)
         log_widget.write(rendered)
 
@@ -376,7 +379,7 @@ class BiosApp(App):
         """Write subprocess stdout/stderr to the execution log"""
         try:
             log_widget = self.query_one("#output-log", RichLog)
-        except Exception:
+        except Exception:  # noqa: BLE001
             return
         combined = []
         stdout = getattr(result, "stdout", None)
@@ -393,7 +396,7 @@ class BiosApp(App):
             if line:
                 try:
                     rendered = Text.from_ansi(line)
-                except Exception:
+                except Exception:  # noqa: BLE001
                     rendered = Text(line)
                 log_widget.write(rendered)
 
@@ -406,12 +409,10 @@ class BiosApp(App):
 
     def _ensure_log_shown(self) -> None:
         """Make sure the log panel is visible"""
-        try:
+        with suppress(Exception):
             container = self.query_one("#output-container")
             if not container.has_class("show-log"):
                 container.add_class("show-log")
-        except Exception:
-            pass  # May fail in test environment
 
     def _set_busy(self, busy: bool, operation: str = "") -> None:
         self._is_busy = busy
@@ -420,10 +421,8 @@ class BiosApp(App):
             "#btn-run-trace",
             "#btn-run-parse",
         ]:
-            try:
+            with suppress(Exception):
                 self.query_one(btn_id, Button).disabled = busy
-            except Exception:
-                pass
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         button_id = event.button.id
@@ -454,13 +453,8 @@ class BiosApp(App):
                 tool=self.default_elevation,
                 extra_env=["AMD_BIOS_TUI=1"],
             )
-            elevation_ctx = (
-                self.suspend()
-                if self.default_elevation == "sudo" or running_ssh()
-                else nullcontext()
-            )
-            with elevation_ctx:
-                result = subprocess.run(full_cmd, capture_output=True, text=True)
+            with self.suspend():
+                result = run_elevated_cmd(full_cmd)
                 ret = result.returncode
             self._ensure_log_shown()
             self._log_subprocess_output(result)
@@ -492,7 +486,7 @@ class BiosApp(App):
             with capture_output_to_log(self, log_widget, self.set_status):
                 app = AmdBios(None, tool_debug)
                 app.set_tracing(action == "enable")
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             self.call_from_thread(
                 self.log_message, f"[bold red]Error running trace: {e}[/bold red]"
             )
@@ -521,7 +515,7 @@ class BiosApp(App):
             with capture_output_to_log(self, log_widget, self.set_status):
                 app = AmdBios(input_file or None, tool_debug)
                 app.run()
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             self.call_from_thread(
                 self.log_message, f"[bold red]Error parsing log: {e}[/bold red]"
             )

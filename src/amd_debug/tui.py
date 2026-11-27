@@ -5,6 +5,8 @@ from __future__ import annotations
 
 import calendar
 import os
+import selectors
+import subprocess
 import sys
 from contextlib import contextmanager
 from datetime import date
@@ -25,7 +27,6 @@ from textual.widgets import (
 )
 
 
-
 def get_elevation_env_vars() -> list[str]:
     """Collect session environment variables to preserve across elevation"""
     env_vars = []
@@ -33,6 +34,7 @@ def get_elevation_env_vars() -> list[str]:
         "XDG_DATA_HOME",
         "AMD_S2IDLE_DB",
         "SSH_CLIENT",
+        "SSH_CONNECTION",
         "SSH_TTY",
     ]:
         value = os.environ.get(var)
@@ -48,6 +50,8 @@ def build_elevated_cmd(
     env_vars = get_elevation_env_vars()
     if extra_env:
         env_vars.extend(extra_env)
+    if not any(v.startswith("PYTHONUNBUFFERED=") for v in env_vars):
+        env_vars.append("PYTHONUNBUFFERED=1")
     if tool == "pkexec":
         import pwd
 
@@ -67,6 +71,79 @@ def build_elevated_cmd(
         # sudo
         preserve_flags = [f"--preserve-env={var.split('=')[0]}" for var in env_vars]
         return ["sudo"] + preserve_flags + ["env"] + env_vars + base_cmd
+
+
+def _write_stream_bytes(target, data: bytes) -> None:
+    """Write raw bytes to a text or binary output stream and flush immediately"""
+    buffer = getattr(target, "buffer", None)
+    if buffer is not None:
+        buffer.write(data)
+        buffer.flush()
+    else:
+        target.write(data.decode("utf-8", errors="replace"))
+        target.flush()
+
+
+def run_elevated_cmd(cmd: list[str]) -> subprocess.CompletedProcess[str]:
+    """Run an elevated command with terminal input access while cloning output.
+
+    Inherits stdin directly so interactive authentication agents (such as
+    pkexec's text agent or sudo) and interactive subcommands can read from the
+    controlling terminal.  stdout and stderr are streamed live to the terminal
+    and simultaneously captured so callers can clone them into the TUI
+    execution log.
+    """
+    stdout_chunks: list[bytes] = []
+    stderr_chunks: list[bytes] = []
+
+    with subprocess.Popen(
+        cmd,
+        stdin=None,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    ) as proc:
+        selector = selectors.DefaultSelector()
+        assert proc.stdout is not None
+        assert proc.stderr is not None
+        selector.register(
+            proc.stdout, selectors.EVENT_READ, (sys.stdout, stdout_chunks)
+        )
+        selector.register(
+            proc.stderr, selectors.EVENT_READ, (sys.stderr, stderr_chunks)
+        )
+
+        try:
+            while selector.get_map():
+                try:
+                    events = selector.select()
+                except KeyboardInterrupt:
+                    if proc.poll() is not None:
+                        break
+                    continue
+                for key, _ in events:
+                    stream = key.fileobj
+                    target, chunks = key.data
+                    try:
+                        data = os.read(stream.fileno(), 4096)
+                    except OSError:
+                        data = b""
+                    if not data:
+                        selector.unregister(stream)
+                        stream.close()
+                        continue
+                    chunks.append(data)
+                    _write_stream_bytes(target, data)
+        finally:
+            selector.close()
+
+        returncode = proc.wait()
+
+    return subprocess.CompletedProcess(
+        args=cmd,
+        returncode=returncode,
+        stdout=b"".join(stdout_chunks).decode("utf-8", errors="replace"),
+        stderr=b"".join(stderr_chunks).decode("utf-8", errors="replace"),
+    )
 
 
 class LogStream:

@@ -503,7 +503,11 @@ def relaunch_sudo(pkexec: bool = False, extra_args: list | None = None) -> None:
 
 
 def running_ssh():
-    return "SSH_CLIENT" in os.environ or "SSH_TTY" in os.environ
+    return (
+        "SSH_CLIENT" in os.environ
+        or "SSH_TTY" in os.environ
+        or "SSH_CONNECTION" in os.environ
+    )
 
 
 def convert_string_to_bool(str_value) -> bool:
